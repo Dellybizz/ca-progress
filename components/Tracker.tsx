@@ -862,36 +862,41 @@ function TrackerDashboard({
     };
   }, [userId]);
 
-  useEffect(() => {
-    if (!supabase || !userId || !dataReady) return;
+  const [saveStatus, setSaveStatus] =
+    useState<"idle" | "saving" | "saved" | "error">("idle");
 
-    if (saveTimerRef.current) {
-      window.clearTimeout(saveTimerRef.current);
+  const saveProgress = async () => {
+    if (!supabase || !userId) {
+      setSaveStatus("error");
+      return;
     }
 
-    saveTimerRef.current = window.setTimeout(async () => {
-      const { error } = await supabase
-        .from("user_progress")
-        .upsert(
-          {
-            user_id: userId,
-            progress: { progress, activities, studyHours },
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id" }
-        );
+    setSaveStatus("saving");
 
-      if (error) {
-        console.error("Unable to save progress:", error.message);
-      }
-    }, 500);
+    const { error } = await supabase
+      .from("user_progress")
+      .upsert(
+        {
+          user_id: userId,
+          progress: { progress, activities, studyHours },
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
 
-    return () => {
-      if (saveTimerRef.current) {
-        window.clearTimeout(saveTimerRef.current);
-      }
-    };
-  }, [userId, progress, activities, studyHours, dataReady]);
+    if (error) {
+      console.error("Unable to save progress:", error.message);
+      setSaveStatus("error");
+      return;
+    }
+
+    setSaveStatus("saved");
+
+    window.setTimeout(() => {
+      setSaveStatus("idle");
+    }, 2000);
+  };
+
 
   useEffect(() => {
     window.localStorage.setItem("ca-progress-view", view);
@@ -1186,6 +1191,20 @@ function TrackerDashboard({
                 : "Track every step of your CA Intermediate preparation."}
             </p>
           </div>
+
+          <button
+            className={`save-progress-button ${saveStatus}`}
+            onClick={saveProgress}
+            disabled={saveStatus === "saving"}
+          >
+            {saveStatus === "saving"
+              ? "Saving..."
+              : saveStatus === "saved"
+                ? "Saved ✓"
+                : saveStatus === "error"
+                  ? "Save failed"
+                  : "Save Progress"}
+          </button>
 
           <div className="top-actions">
             <button className="icon-button">
@@ -3066,6 +3085,35 @@ function AuthStyles() {
         margin-top: 20px;
         background: #fff8e8;
         color: #8a6316;
+      }
+
+      .save-progress-button {
+        border: 1px solid #dfe5ee;
+        background: #111827;
+        color: #fff;
+        padding: 10px 15px;
+        border-radius: 9px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .save-progress-button:hover {
+        opacity: 0.92;
+      }
+
+      .save-progress-button:disabled {
+        cursor: wait;
+        opacity: 0.7;
+      }
+
+      .save-progress-button.saved {
+        background: #18703b;
+      }
+
+      .save-progress-button.error {
+        background: #b3261e;
       }
 
       .logout-button {
