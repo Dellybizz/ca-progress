@@ -5,6 +5,7 @@ import {
   ReactNode,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -659,6 +660,9 @@ export default function Tracker({ initialView = "Dashboard" }: { initialView?: V
       email={
         session.user.email || ""
       }
+      userId={
+        session.user.id
+      }
       onLogout={
         handleLogout
       }
@@ -704,9 +708,11 @@ function AuthFeature({
 
 function TrackerDashboard({
   email,
+  userId,
   onLogout,
 }: {
   email: string;
+  userId: string;
   onLogout: () => void;
 }) {
   const subjects =
@@ -733,9 +739,13 @@ function TrackerDashboard({
   );
 
   const [view, setView] =
-    useState<View>(
-      "Dashboard"
-    );
+    useState<View>(() => {
+      if (typeof window === "undefined") return "Dashboard";
+      const savedView = window.localStorage.getItem("ca-progress-view") as View | null;
+      return menu.some((item) => item.label === savedView)
+        ? savedView!
+        : "Dashboard";
+    });
 
   const [
     activeSubject,
@@ -793,69 +803,92 @@ function TrackerDashboard({
       .toUpperCase() || "C";
 
   /* =======================================================
-     LOAD USER DATA
+     SUPABASE USER DATA
   ======================================================= */
 
+  const dataReadyRef =
+    useRef(false);
+
+  const [dataReady, setDataReady] =
+    useState(false);
+
+  const [saveStatus, setSaveStatus] =
+    useState<"idle" | "saving" | "saved" | "error">("idle");
+
+
   useEffect(() => {
-    const storageKey =
-      `ca-progress-data-v3-${email}`;
+    let cancelled = false;
 
-    const saved =
-      window.localStorage.getItem(
-        storageKey
-      );
+    dataReadyRef.current = false;
+    setDataReady(false);
 
-    if (!saved) {
+    if (!supabase || !userId) {
+      dataReadyRef.current = true;
+      setDataReady(true);
       return;
     }
 
-    try {
-      const data =
-        JSON.parse(saved);
+    const loadUserData = async () => {
+      const { data, error } =
+        await supabase
+          .from("user_progress")
+          .select("progress")
+          .eq("user_id", userId)
+          .maybeSingle();
 
-      setProgress(
-        data.progress || {}
-      );
+      if (cancelled) return;
 
-      setActivities(
-        data.activities || []
-      );
+      if (error) {
+        console.error("Unable to load progress:", error.message);
+      } else if (data?.progress) {
+        const saved = data.progress as {
+          progress?: Progress;
+          activities?: ActivityItem[];
+          studyHours?: number[];
+        };
 
-      setStudyHours(
-        data.studyHours ||
-          defaultStudyHours
-      );
-    } catch {
-      // Ignore malformed local data
-    }
-  }, [email]);
+        setProgress(saved.progress || {});
+        setActivities(saved.activities || []);
+        setStudyHours(saved.studyHours || defaultStudyHours);
+      }
 
-  /* =======================================================
-     SAVE USER DATA
-  ======================================================= */
+      dataReadyRef.current = true;
+      setDataReady(true);
+    };
 
-  useEffect(() => {
-    if (!email) {
+    loadUserData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+
+
+
+
+
+  const saveProgress = async () => {
+    if (!supabase || !userId || !dataReady) return;
+    setSaveStatus("saving");
+    const { error } = await supabase.from("user_progress").upsert({
+      user_id: userId,
+      progress: { progress, activities, studyHours },
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+
+    if (error) {
+      console.error("Unable to save progress:", error.message);
+      setSaveStatus("error");
       return;
     }
+    setSaveStatus("saved");
+    window.setTimeout(() => setSaveStatus("idle"), 1800);
+  };
 
-    const storageKey =
-      `ca-progress-data-v3-${email}`;
-
-    window.localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        progress,
-        activities,
-        studyHours,
-      })
-    );
-  }, [
-    email,
-    progress,
-    activities,
-    studyHours,
-  ]);
+  useEffect(() => {
+    window.localStorage.setItem("ca-progress-view", view);
+  }, [view]);
 
   /* =======================================================
      STATS
@@ -1004,9 +1037,7 @@ function TrackerDashboard({
           )
       );
 
-      flash(
-        stageCopy[stage]
-      );
+
     }
   };
 
@@ -1014,6 +1045,7 @@ function TrackerDashboard({
     label: View
   ) => {
     setView(label);
+    window.localStorage.setItem("ca-progress-view", label);
 
     setSidebarOpen(
       false
@@ -1291,6 +1323,12 @@ function TrackerDashboard({
             subjectStats={
               subjectStats
             }
+            onSaveProgress={
+              saveProgress
+            }
+            saveStatus={
+              saveStatus
+            }
           />
         )}
 
@@ -1362,16 +1400,6 @@ function TrackerDashboard({
           />
         )}
       </section>
-
-      {toast && (
-        <div className="toast">
-          <Check
-            size={16}
-          />
-
-          {toast}
-        </div>
-      )}
     </main>
   );
 }
@@ -1862,6 +1890,8 @@ function ChaptersView({
   progress,
   toggle,
   subjectStats,
+  onSaveProgress,
+  saveStatus,
 }: {
   subjects: SubjectName[];
   activeSubject: SubjectName;
@@ -1965,26 +1995,42 @@ function ChaptersView({
           {rows.length} Chapters
         </div>
 
-        <label>
-          <Search
-            size={16}
-          />
+        <div
+          className="chapter-toolbar-actions"
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: "10px",
+            flexWrap: "nowrap",
+          }}
+        >
+          <label
+            style={{
+              margin: 0,
+              minWidth: "272px",
+            }}
+          >
+            <Search
+              size={16}
+            />
 
-          <input
-            value={
-              search
-            }
-            onChange={(
-              event
-            ) =>
-              setSearch(
-                event.target
-                  .value
-              )
-            }
-            placeholder="Search chapters"
-          />
-        </label>
+            <input
+              value={
+                search
+              }
+              onChange={(
+                event
+              ) =>
+                setSearch(
+                  event.target
+                    .value
+                )
+              }
+              placeholder="Search chapters"
+            />
+          </label>
+        </div>
       </div>
 
       <div className="chapter-table">
@@ -3025,6 +3071,1235 @@ function AuthStyles() {
         margin-top: 20px;
         background: #fff8e8;
         color: #8a6316;
+      }
+
+      .chapter-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .chapter-toolbar {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 12px !important;
+        flex-wrap: nowrap !important;
+      }
+
+      .chapter-toolbar-actions {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 10px !important;
+        width: 100%;
+        min-width: 0;
+      }
+      .chapter-toolbar-actions label {
+        display: flex !important;
+        align-items: center !important;
+        flex: 1 1 auto;
+        min-width: 0 !important;
+        margin: 0 !important;
+      }
+      .chapter-toolbar-actions input {
+        min-width: 0 !important;
+        width: 100%;
+      }
+      button.chapter-save-button {
+        appearance: none !important;
+        -webkit-appearance: none !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        flex: 0 0 auto !important;
+        min-width: 132px !important;
+        height: 40px !important;
+        padding: 0 18px !important;
+        border: none !important;
+        border-radius: 9px !important;
+        background: #3568b8 !important;
+        color: #fff !important;
+        font-size: 13px !important;
+        font-weight: 700 !important;
+        white-space: nowrap !important;
+        cursor: pointer;
+      }
+      button.chapter-save-button.saved { background: #2f8a63 !important; }
+      button.chapter-save-button.error { background: #c2413b !important; }
+      button.chapter-save-button:disabled { opacity: .75; cursor: wait; }
+
+      @media (max-width: 720px) {
+        .chapter-toolbar-actions {
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: center !important;
+          gap: 8px !important;
+          width: 100% !important;
+        }
+        .chapter-toolbar-actions label {
+          flex: 1 1 auto !important;
+          min-width: 0 !important;
+        }
+        button.chapter-save-button {
+          flex: 0 0 auto !important;
+          min-width: 126px !important;
+          height: 40px !important;
+          padding: 0 14px !important;
+        }
+      }
+
+      .logout-button {
+        color: #d44b4b;
+      }
+
+      .settings-account {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 24px;
+      }
+
+      .settings-account h3 {
+        margin: 0 0 5px;
+      }
+
+      .settings-account p {
+        margin: 0;
+        color: #7a8290;
+      }
+
+      .settings-avatar {
+        width: 50px;
+        height: 50px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: #e9efff;
+        color: #245ec2;
+        font-weight: 800;
+      }
+
+      .settings-logout {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid #f1d6d6;
+        background: #fff;
+        color: #c94a4a;
+        padding: 10px 14px;
+        border-radius: 9px;
+        cursor: pointer;
+      }
+
+      @media (max-width: 850px) {
+        .auth-page {
+          grid-template-columns: 1fr;
+        }
+
+        .auth-left {
+          min-height: auto;
+          padding: 32px 24px 50px;
+        }
+
+        .auth-hero {
+          margin: 65px 0 0;
+        }
+
+        .auth-hero h1 {
+          font-size: 48px;
+        }
+
+        .auth-footer {
+          display: none;
+        }
+
+        .auth-right {
+          padding: 28px 18px 40px;
+        }
+
+        .auth-card {
+          padding: 30px 22px;
+        }
+      }
+    `}</style>
+  );
+}        <div className="chapter-toolbar-actions">
+
+
+        <button
+          type="button"
+          className={`chapter-save-button ${saveStatus}`}
+          onClick={onSaveProgress}
+          disabled={saveStatus === "saving"}
+        >
+          {saveStatus === "saving"
+            ? "Saving..."
+            : saveStatus === "saved"
+              ? "Saved ✓"
+              : saveStatus === "error"
+                ? "Try Again"
+                : "Save Progress"}
+        </button>
+        </div>
+        </div>
+      </div>
+
+      <div className="chapter-table">
+        <div className="chapter-head">
+          <span>
+            # &nbsp; Chapter Name
+          </span>
+
+          {stages.map(
+            (stage) => (
+              <span
+                key={
+                  stage.key
+                }
+              >
+                {
+                  stage.short
+                }
+              </span>
+            )
+          )}
+        </div>
+
+        {rows.map(
+          (
+            chapter,
+            index
+          ) => {
+            const key =
+              keyFor(
+                activeSubject,
+                chapter
+              );
+
+            return (
+              <div
+                className="chapter-row"
+                key={
+                  chapter
+                }
+              >
+                <span>
+                  <b>
+                    {index + 1}
+                  </b>
+
+                  {chapter}
+                </span>
+
+                {stages.map(
+                  (stage) => (
+                    <button
+                      key={
+                        stage.key
+                      }
+                      title={
+                        stage.label
+                      }
+                      className={`stage-dot ${
+                        progress[
+                          key
+                        ]?.[
+                          stage.key
+                        ]
+                          ? `on ${stage.key}`
+                          : ""
+                      }`}
+                      onClick={() =>
+                        toggle(
+                          activeSubject,
+                          chapter,
+                          stage.key
+                        )
+                      }
+                    >
+                      {progress[
+                        key
+                      ]?.[
+                        stage.key
+                      ] && (
+                        <Check
+                          size={
+                            13
+                          }
+                        />
+                      )}
+                    </button>
+                  )
+                )}
+              </div>
+            );
+          }
+        )}
+      </div>
+
+      <div className="status-legend">
+        {stages.map(
+          (stage) => (
+            <span
+              key={
+                stage.key
+              }
+              className={
+                stage.key
+              }
+            >
+              <i />
+
+              {
+                stage.label
+              }
+            </span>
+          )
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* =========================================================
+   ANALYTICS
+========================================================= */
+
+function AnalyticsView({
+  overall,
+  counts,
+  total,
+  subjects,
+  subjectStats,
+  studyHours,
+}: any) {
+  const totalHours =
+    studyHours.reduce(
+      (
+        a: number,
+        b: number
+      ) => a + b,
+      0
+    );
+
+  return (
+    <section className="analytics-page">
+      <div className="page-heading">
+        <div>
+          <h2>
+            Analytics
+          </h2>
+
+          <p>
+            Detailed insights into
+            your preparation.
+          </p>
+        </div>
+
+        <button className="select-btn">
+          This Week⌄
+        </button>
+      </div>
+
+      <div className="analytics-stats">
+        <Metric
+          icon={
+            <Clock3 />
+          }
+          label="Study Time"
+          value={`${totalHours.toFixed(
+            1
+          )}h`}
+        />
+
+        <Metric
+          icon={
+            <Activity />
+          }
+          label="Study Sessions"
+          value="7"
+        />
+
+        <Metric
+          icon={
+            <Clock3 />
+          }
+          label="Daily Average"
+          value={`${(
+            totalHours / 7
+          ).toFixed(1)}h`}
+        />
+
+        <Metric
+          icon={
+            <Trophy />
+          }
+          label="Goal Completion"
+          value={`${overall}%`}
+        />
+      </div>
+
+      <div className="analytics-grid">
+        <section className="panel chart-panel">
+          <h3>
+            Study Time Trend
+          </h3>
+
+          <MiniLine
+            data={
+              studyHours
+            }
+            tall
+          />
+        </section>
+
+        <section className="panel donut-panel">
+          <h3>
+            Progress by Subject
+          </h3>
+
+          <div className="donut-content">
+            <ProgressRing
+              value={
+                overall
+              }
+            />
+
+            <div>
+              {subjects.map(
+                (
+                  subject: SubjectName
+                ) => (
+                  <div
+                    className="legend-subject"
+                    key={
+                      subject
+                    }
+                  >
+                    <i
+                      style={{
+                        background:
+                          subjectMeta[
+                            subject
+                          ].color,
+                      }}
+                    />
+
+                    <span>
+                      {
+                        subjectMeta[
+                          subject
+                        ].short
+                      }
+                    </span>
+
+                    <b>
+                      {
+                        subjectStats(
+                          subject
+                        ).percent
+                      }
+                      %
+                    </b>
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section className="panel analytics-progress">
+        <h3>
+          Completion Overview
+        </h3>
+
+        {stages.map(
+          (stage) => (
+            <ProgressLine
+              key={
+                stage.key
+              }
+              label={
+                stage.label
+              }
+              value={
+                total
+                  ? Math.round(
+                      (counts[
+                        stage.key
+                      ] /
+                        total) *
+                        100
+                    )
+                  : 0
+              }
+            />
+          )
+        )}
+      </section>
+    </section>
+  );
+}
+
+/* =========================================================
+   ACTIVITY
+========================================================= */
+
+function ActivityView({
+  activities,
+}: {
+  activities: ActivityItem[];
+}) {
+  return (
+    <section className="single-page">
+      <div className="page-heading">
+        <div>
+          <h2>
+            Activity
+          </h2>
+
+          <p>
+            A history of your completed
+            study milestones.
+          </p>
+        </div>
+      </div>
+
+      <section className="panel activity-full">
+        {activities.length ? (
+          activities.map(
+            (item) => (
+              <RecentRow
+                key={
+                  item.id
+                }
+                item={
+                  item
+                }
+              />
+            )
+          )
+        ) : (
+          <div className="empty">
+            <Activity
+              size={28}
+            />
+
+            <h3>
+              No activity yet
+            </h3>
+
+            <p>
+              Mark a chapter,
+              revision, or test
+              complete to see it here.
+            </p>
+          </div>
+        )}
+      </section>
+    </section>
+  );
+}
+
+/* =========================================================
+   SETTINGS
+========================================================= */
+
+function SettingsView({
+  email,
+  onLogout,
+}: {
+  email: string;
+  onLogout: () => void;
+}) {
+  return (
+    <section className="single-page">
+      <div className="page-heading">
+        <div>
+          <h2>
+            Settings
+          </h2>
+
+          <p>
+            Manage your account.
+          </p>
+        </div>
+      </div>
+
+      <section className="panel settings-account">
+        <div className="settings-avatar">
+          {email
+            .charAt(0)
+            .toUpperCase()}
+        </div>
+
+        <div>
+          <h3>
+            Account
+          </h3>
+
+          <p>
+            {email}
+          </p>
+        </div>
+
+        <button
+          className="settings-logout"
+          onClick={
+            onLogout
+          }
+        >
+          <LogOut
+            size={17}
+          />
+
+          Logout
+        </button>
+      </section>
+    </section>
+  );
+}
+
+/* =========================================================
+   COMING SOON
+========================================================= */
+
+function ComingSoon({
+  view,
+  onDashboard,
+}: {
+  view: View;
+  onDashboard: () => void;
+}) {
+  return (
+    <section className="coming-soon panel">
+      <div className="coming-icon">
+        <Plus
+          size={24}
+        />
+      </div>
+
+      <h2>
+        {view}
+      </h2>
+
+      <p>
+        This section is ready for
+        the next build phase.
+        The dashboard and chapter
+        tracker are already functional.
+      </p>
+
+      <button
+        onClick={
+          onDashboard
+        }
+      >
+        Back to Dashboard
+      </button>
+    </section>
+  );
+}
+
+/* =========================================================
+   SMALL COMPONENTS
+========================================================= */
+
+function SubjectRow({
+  subject,
+  stats,
+  onClick,
+}: {
+  subject: SubjectName;
+  stats: {
+    total: number;
+    done: number;
+    percent: number;
+  };
+  onClick: () => void;
+}) {
+  const meta =
+    subjectMeta[
+      subject
+    ];
+
+  return (
+    <button
+      className="subject-row-new"
+      onClick={
+        onClick
+      }
+    >
+      <span
+        className="subject-badge"
+        style={{
+          background:
+            meta.color,
+        }}
+      >
+        {meta.code}
+      </span>
+
+      <span className="subject-name">
+        {meta.short}
+      </span>
+
+      <span className="subject-bar">
+        <i
+          style={{
+            width:
+              `${stats.percent}%`,
+          }}
+        />
+      </span>
+
+      <b>
+        {stats.percent}%
+      </b>
+
+      <small>
+        {stats.done}/
+        {stats.total}
+      </small>
+
+      <ChevronRight
+        size={17}
+      />
+    </button>
+  );
+}
+
+function RecentRow({
+  item,
+}: {
+  item: ActivityItem;
+}) {
+  const meta =
+    subjectMeta[
+      item.subject as SubjectName
+    ];
+
+  const stage =
+    stages.find(
+      (
+        itemStage
+      ) =>
+        itemStage.key ===
+        item.stage
+    );
+
+  return (
+    <div className="recent-row">
+      <span
+        className="subject-badge"
+        style={{
+          background:
+            meta?.color ||
+            "#5b6fd6",
+        }}
+      >
+        {meta?.code ||
+          "CA"}
+      </span>
+
+      <span className="recent-copy">
+        <b>
+          {item.chapter}
+        </b>
+
+        <small>
+          {
+            stageCopy[
+              item.stage
+            ]
+          }
+        </small>
+      </span>
+
+      <span
+        className={`activity-status ${
+          item.stage
+        }`}
+      >
+        {
+          stage?.short
+        }
+      </span>
+
+      <time>
+        {item.time}
+      </time>
+    </div>
+  );
+}
+
+function Metric({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div className="metric">
+      <i>
+        {icon}
+      </i>
+
+      <span>
+        {label}
+      </span>
+
+      <b>
+        {value}
+      </b>
+    </div>
+  );
+}
+
+function ProgressLine({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="progress-line">
+      <span>
+        {label}
+      </span>
+
+      <div>
+        <i
+          style={{
+            width:
+              `${value}%`,
+          }}
+        />
+      </div>
+
+      <b>
+        {value}%
+      </b>
+    </div>
+  );
+}
+
+function ProgressRing({
+  value,
+}: {
+  value: number;
+}) {
+  return (
+    <div
+      className="progress-ring"
+      style={{
+        background:
+          `conic-gradient(
+            #2d68cf ${value}%,
+            #e9edf3 0
+          )`,
+      }}
+    >
+      <div>
+        <b>
+          {value}%
+        </b>
+
+        <span>
+          Completed
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function MiniLine({
+  data,
+  tall = false,
+}: {
+  data: number[];
+  tall?: boolean;
+}) {
+  const max =
+    Math.max(
+      ...data,
+      1
+    );
+
+  const points =
+    data
+      .map(
+        (
+          value,
+          index
+        ) =>
+          `${index *
+            (100 /
+              (data.length -
+                1))},${
+            100 -
+            (value /
+              max) *
+              75 -
+            5
+          }`
+      )
+      .join(" ");
+
+  return (
+    <div
+      className={`mini-line ${
+        tall
+          ? "tall"
+          : ""
+      }`}
+    >
+      <svg
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+      >
+        <defs>
+          <linearGradient
+            id="fill"
+            x1="0"
+            y1="0"
+            x2="0"
+            y2="1"
+          >
+            <stop
+              offset="0%"
+              stopColor="#2d68cf"
+              stopOpacity=".18"
+            />
+
+            <stop
+              offset="100%"
+              stopColor="#2d68cf"
+              stopOpacity="0"
+            />
+          </linearGradient>
+        </defs>
+
+        <polygon
+          points={`0,100 ${points} 100,100`}
+          fill="url(#fill)"
+        />
+
+        <polyline
+          points={
+            points
+          }
+          fill="none"
+          stroke="#2d68cf"
+          strokeWidth="2"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+
+      <div className="days">
+        {[
+          "Mon",
+          "Tue",
+          "Wed",
+          "Thu",
+          "Fri",
+          "Sat",
+          "Sun",
+        ].map(
+          (day) => (
+            <span
+              key={
+                day
+              }
+            >
+              {day}
+            </span>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   AUTH STYLES
+========================================================= */
+
+function AuthStyles() {
+  return (
+    <style>{`
+      .auth-page {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        background: #f7f8fb;
+        font-family: Arial, sans-serif;
+      }
+
+      .auth-left {
+        min-height: 100vh;
+        padding: 42px 8vw;
+        background:
+          radial-gradient(
+            circle at 20% 20%,
+            rgba(92, 116, 215, 0.15),
+            transparent 30%
+          ),
+          linear-gradient(
+            135deg,
+            #101a31,
+            #17274b
+          );
+        color: white;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .auth-brand {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        font-size: 13px;
+        letter-spacing: 2px;
+        font-weight: 700;
+      }
+
+      .auth-logo {
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        border-radius: 12px;
+        background: #ffffff;
+        color: #1b3d83;
+        font-size: 17px;
+        font-weight: 800;
+        letter-spacing: -1px;
+      }
+
+      .auth-hero {
+        margin: auto 0;
+        max-width: 570px;
+      }
+
+      .auth-badge {
+        display: inline-flex;
+        padding: 8px 12px;
+        border: 1px solid rgba(255,255,255,.16);
+        background: rgba(255,255,255,.07);
+        border-radius: 999px;
+        font-size: 11px;
+        letter-spacing: 1.3px;
+        margin-bottom: 26px;
+      }
+
+      .auth-hero h1 {
+        margin: 0;
+        font-size: clamp(42px, 5vw, 72px);
+        line-height: 1.02;
+        letter-spacing: -3px;
+      }
+
+      .auth-hero h1 span {
+        color: #9fb9ff;
+      }
+
+      .auth-hero > p {
+        max-width: 480px;
+        margin: 24px 0 38px;
+        color: #b7c1d7;
+        line-height: 1.7;
+        font-size: 16px;
+      }
+
+      .auth-features {
+        display: grid;
+        gap: 17px;
+      }
+
+      .auth-feature {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .auth-feature-icon {
+        width: 40px;
+        height: 40px;
+        display: grid;
+        place-items: center;
+        background: rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.1);
+        border-radius: 11px;
+        color: #a9c0ff;
+      }
+
+      .auth-feature strong,
+      .auth-feature span {
+        display: block;
+      }
+
+      .auth-feature strong {
+        font-size: 14px;
+        margin-bottom: 3px;
+      }
+
+      .auth-feature span {
+        color: #aab6cf;
+        font-size: 13px;
+      }
+
+      .auth-footer {
+        color: #7584a3;
+        font-size: 12px;
+      }
+
+      .auth-right {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 32px;
+      }
+
+      .auth-card {
+        width: 100%;
+        max-width: 430px;
+        background: white;
+        border: 1px solid #e8ebf1;
+        border-radius: 22px;
+        padding: 42px;
+        box-shadow: 0 20px 70px rgba(25, 38, 68, .08);
+      }
+
+      .auth-card-head h2 {
+        margin: 0;
+        color: #182033;
+        font-size: 30px;
+        letter-spacing: -1px;
+      }
+
+      .auth-card-head p {
+        margin: 9px 0 30px;
+        color: #7c8595;
+        line-height: 1.6;
+        font-size: 14px;
+      }
+
+      .auth-form {
+        display: grid;
+        gap: 17px;
+      }
+
+      .auth-form label {
+        display: grid;
+        gap: 8px;
+        color: #4d5564;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .auth-form input {
+        width: 100%;
+        box-sizing: border-box;
+        height: 48px;
+        border: 1px solid #dfe3eb;
+        border-radius: 11px;
+        padding: 0 14px;
+        outline: none;
+        font-size: 14px;
+        transition: .2s;
+      }
+
+      .auth-form input:focus {
+        border-color: #2d68cf;
+        box-shadow: 0 0 0 4px rgba(45,104,207,.08);
+      }
+
+      .auth-submit {
+        height: 50px;
+        border: 0;
+        border-radius: 11px;
+        background: #245ec2;
+        color: white;
+        font-weight: 700;
+        font-size: 14px;
+        cursor: pointer;
+        margin-top: 4px;
+      }
+
+      .auth-submit:hover {
+        background: #1d51aa;
+      }
+
+      .auth-submit:disabled {
+        opacity: .65;
+        cursor: not-allowed;
+      }
+
+      .auth-switch {
+        margin-top: 25px;
+        text-align: center;
+        color: #778092;
+        font-size: 13px;
+      }
+
+      .auth-switch button {
+        border: 0;
+        background: none;
+        color: #245ec2;
+        font-weight: 700;
+        margin-left: 6px;
+        cursor: pointer;
+      }
+
+      .auth-error,
+      .auth-success,
+      .auth-config-warning {
+        padding: 11px 13px;
+        border-radius: 9px;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .auth-error {
+        background: #fff1f1;
+        color: #b3261e;
+        border: 1px solid #ffd7d5;
+      }
+
+      .auth-success {
+        background: #effaf3;
+        color: #18703b;
+        border: 1px solid #ccebd6;
+      }
+
+      .auth-config-warning {
+        margin-top: 20px;
+        background: #fff8e8;
+        color: #8a6316;
+      }
+
+      .chapter-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .chapter-toolbar {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 12px !important;
+        flex-wrap: nowrap !important;
       }
 
       .logout-button {

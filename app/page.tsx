@@ -1,5 +1,5 @@
 import Tracker from "../components/Tracker";
 
-export default function DashboardPage() {
+export default function HomePage() {
   return <Tracker initialView="Dashboard" />;
 }

@@ -1,5 +1,5 @@
 import Tracker from "../../components/Tracker";
 
-export default function GoalsPage() {
+export default function Page() {
   return <Tracker initialView="Goals" />;
 }
