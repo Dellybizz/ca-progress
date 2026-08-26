@@ -5,7 +5,6 @@ import {
   ReactNode,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 
@@ -258,7 +257,7 @@ const defaultStudyHours = [
    MAIN COMPONENT
 ========================================================= */
 
-export default function Tracker() {
+export default function Tracker({ initialView = "Dashboard" }: { initialView?: View }) {
   const [session, setSession] =
     useState<Session | null>(null);
 
@@ -660,9 +659,6 @@ export default function Tracker() {
       email={
         session.user.email || ""
       }
-      userId={
-        session.user.id
-      }
       onLogout={
         handleLogout
       }
@@ -708,11 +704,9 @@ function AuthFeature({
 
 function TrackerDashboard({
   email,
-  userId,
   onLogout,
 }: {
   email: string;
-  userId: string;
   onLogout: () => void;
 }) {
   const subjects =
@@ -739,13 +733,9 @@ function TrackerDashboard({
   );
 
   const [view, setView] =
-    useState<View>(() => {
-      if (typeof window === "undefined") return "Dashboard";
-      const savedView = window.localStorage.getItem("ca-progress-view") as View | null;
-      return menu.some((item) => item.label === savedView)
-        ? savedView!
-        : "Dashboard";
-    });
+    useState<View>(
+      "Dashboard"
+    );
 
   const [
     activeSubject,
@@ -803,92 +793,69 @@ function TrackerDashboard({
       .toUpperCase() || "C";
 
   /* =======================================================
-     SUPABASE USER DATA
+     LOAD USER DATA
   ======================================================= */
 
-  const dataReadyRef =
-    useRef(false);
-
-  const [dataReady, setDataReady] =
-    useState(false);
-
-  const [saveStatus, setSaveStatus] =
-    useState<"idle" | "saving" | "saved" | "error">("idle");
-
-
   useEffect(() => {
-    let cancelled = false;
+    const storageKey =
+      `ca-progress-data-v3-${email}`;
 
-    dataReadyRef.current = false;
-    setDataReady(false);
+    const saved =
+      window.localStorage.getItem(
+        storageKey
+      );
 
-    if (!supabase || !userId) {
-      dataReadyRef.current = true;
-      setDataReady(true);
+    if (!saved) {
       return;
     }
 
-    const loadUserData = async () => {
-      const { data, error } =
-        await supabase
-          .from("user_progress")
-          .select("progress")
-          .eq("user_id", userId)
-          .maybeSingle();
+    try {
+      const data =
+        JSON.parse(saved);
 
-      if (cancelled) return;
+      setProgress(
+        data.progress || {}
+      );
 
-      if (error) {
-        console.error("Unable to load progress:", error.message);
-      } else if (data?.progress) {
-        const saved = data.progress as {
-          progress?: Progress;
-          activities?: ActivityItem[];
-          studyHours?: number[];
-        };
+      setActivities(
+        data.activities || []
+      );
 
-        setProgress(saved.progress || {});
-        setActivities(saved.activities || []);
-        setStudyHours(saved.studyHours || defaultStudyHours);
-      }
-
-      dataReadyRef.current = true;
-      setDataReady(true);
-    };
-
-    loadUserData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
-
-
-
-
-
-  const saveProgress = async () => {
-    if (!supabase || !userId || !dataReady) return;
-    setSaveStatus("saving");
-    const { error } = await supabase.from("user_progress").upsert({
-      user_id: userId,
-      progress: { progress, activities, studyHours },
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "user_id" });
-
-    if (error) {
-      console.error("Unable to save progress:", error.message);
-      setSaveStatus("error");
-      return;
+      setStudyHours(
+        data.studyHours ||
+          defaultStudyHours
+      );
+    } catch {
+      // Ignore malformed local data
     }
-    setSaveStatus("saved");
-    window.setTimeout(() => setSaveStatus("idle"), 1800);
-  };
+  }, [email]);
+
+  /* =======================================================
+     SAVE USER DATA
+  ======================================================= */
 
   useEffect(() => {
-    window.localStorage.setItem("ca-progress-view", view);
-  }, [view]);
+    if (!email) {
+      return;
+    }
+
+    const storageKey =
+      `ca-progress-data-v3-${email}`;
+
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        progress,
+        activities,
+        studyHours,
+      })
+    );
+  }, [
+    email,
+    progress,
+    activities,
+    studyHours,
+  ]);
 
   /* =======================================================
      STATS
@@ -1037,7 +1004,9 @@ function TrackerDashboard({
           )
       );
 
-
+      flash(
+        stageCopy[stage]
+      );
     }
   };
 
@@ -1045,7 +1014,6 @@ function TrackerDashboard({
     label: View
   ) => {
     setView(label);
-    window.localStorage.setItem("ca-progress-view", label);
 
     setSidebarOpen(
       false
@@ -1323,12 +1291,6 @@ function TrackerDashboard({
             subjectStats={
               subjectStats
             }
-            onSaveProgress={
-              saveProgress
-            }
-            saveStatus={
-              saveStatus
-            }
           />
         )}
 
@@ -1400,6 +1362,16 @@ function TrackerDashboard({
           />
         )}
       </section>
+
+      {toast && (
+        <div className="toast">
+          <Check
+            size={16}
+          />
+
+          {toast}
+        </div>
+      )}
     </main>
   );
 }
@@ -1890,8 +1862,6 @@ function ChaptersView({
   progress,
   toggle,
   subjectStats,
-  onSaveProgress,
-  saveStatus,
 }: {
   subjects: SubjectName[];
   activeSubject: SubjectName;
@@ -1915,8 +1885,6 @@ function ChaptersView({
     done: number;
     percent: number;
   };
-  onSaveProgress: () => void;
-  saveStatus: "idle" | "saving" | "saved" | "error";
 }) {
   const rows =
     syllabus[
@@ -1997,57 +1965,26 @@ function ChaptersView({
           {rows.length} Chapters
         </div>
 
-        <div
-          className="chapter-toolbar-actions"
-          style={{
-            display: "flex",
-            flexDirection: "row",
-            alignItems: "center",
-            gap: "10px",
-            flexWrap: "nowrap",
-          }}
-        >
-          <label
-            style={{
-              margin: 0,
-              minWidth: "272px",
-            }}
-          >
-            <Search
-              size={16}
-            />
+        <label>
+          <Search
+            size={16}
+          />
 
-            <input
-              value={
-                search
-              }
-              onChange={(
-                event
-              ) =>
-                setSearch(
-                  event.target
-                    .value
-                )
-              }
-              placeholder="Search chapters"
-            />
-          </label>
-
-          <button
-            type="button"
-            className={`chapter-save-button ${saveStatus}`}
-            onClick={onSaveProgress}
-            disabled={saveStatus === "saving"}
-          >
-            {saveStatus === "saving"
-              ? "Saving..."
-              : saveStatus === "saved"
-                ? "Saved ✓"
-                : saveStatus === "error"
-                  ? "Try Again"
-                  : "Save Progress"}
-          </button>
-        </div>
+          <input
+            value={
+              search
+            }
+            onChange={(
+              event
+            ) =>
+              setSearch(
+                event.target
+                  .value
+              )
+            }
+            placeholder="Search chapters"
+          />
+        </label>
       </div>
 
       <div className="chapter-table">
@@ -3088,83 +3025,6 @@ function AuthStyles() {
         margin-top: 20px;
         background: #fff8e8;
         color: #8a6316;
-      }
-
-      .chapter-toolbar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-      }
-
-      .chapter-toolbar {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        gap: 12px !important;
-        flex-wrap: nowrap !important;
-      }
-
-      .chapter-toolbar-actions {
-        display: flex !important;
-        flex-direction: row !important;
-        align-items: center !important;
-        gap: 10px !important;
-        width: 100%;
-        min-width: 0;
-      }
-      .chapter-toolbar-actions label {
-        display: flex !important;
-        align-items: center !important;
-        flex: 1 1 auto;
-        min-width: 0 !important;
-        margin: 0 !important;
-      }
-      .chapter-toolbar-actions input {
-        min-width: 0 !important;
-        width: 100%;
-      }
-      button.chapter-save-button {
-        appearance: none !important;
-        -webkit-appearance: none !important;
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        flex: 0 0 auto !important;
-        min-width: 132px !important;
-        height: 40px !important;
-        padding: 0 18px !important;
-        border: none !important;
-        border-radius: 9px !important;
-        background: #3568b8 !important;
-        color: #fff !important;
-        font-size: 13px !important;
-        font-weight: 700 !important;
-        white-space: nowrap !important;
-        cursor: pointer;
-      }
-      button.chapter-save-button.saved { background: #2f8a63 !important; }
-      button.chapter-save-button.error { background: #c2413b !important; }
-      button.chapter-save-button:disabled { opacity: .75; cursor: wait; }
-
-      @media (max-width: 720px) {
-        .chapter-toolbar-actions {
-          display: flex !important;
-          flex-direction: row !important;
-          align-items: center !important;
-          gap: 8px !important;
-          width: 100% !important;
-        }
-        .chapter-toolbar-actions label {
-          flex: 1 1 auto !important;
-          min-width: 0 !important;
-        }
-        button.chapter-save-button {
-          flex: 0 0 auto !important;
-          min-width: 126px !important;
-          height: 40px !important;
-          padding: 0 14px !important;
-        }
       }
 
       .logout-button {
