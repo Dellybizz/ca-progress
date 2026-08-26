@@ -3110,61 +3110,83 @@ function AuthStyles() {
         color: #8a6316;
       }
 
-      .chapter-toolbar-actions {
+      .chapter-toolbar {
         display: flex;
         align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .chapter-toolbar-actions {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
         gap: 10px;
+        flex-wrap: nowrap !important;
       }
 
       .chapter-toolbar-actions label {
         min-width: 272px;
+        margin: 0;
       }
 
-      .chapter-save-button {
-        border: 0;
-        background: #3568b8;
-        color: #fff;
+      button.chapter-save-button {
+        appearance: none;
+        -webkit-appearance: none;
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        border: none !important;
+        background: #3568b8 !important;
+        color: #ffffff !important;
         height: 40px;
+        min-width: 126px;
         padding: 0 18px;
         border-radius: 9px;
         font-size: 13px;
         font-weight: 700;
+        line-height: 1;
         cursor: pointer;
         white-space: nowrap;
         box-shadow: 0 4px 12px rgba(53, 104, 184, 0.18);
       }
 
-      .chapter-save-button:hover {
-        background: #2f5fa9;
+      button.chapter-save-button:hover {
+        background: #2f5fa9 !important;
       }
 
-      .chapter-save-button:disabled {
+      button.chapter-save-button:disabled {
         cursor: wait;
         opacity: 0.75;
       }
 
-      .chapter-save-button.saved {
-        background: #2f8a63;
+      button.chapter-save-button.saved {
+        background: #2f8a63 !important;
       }
 
-      .chapter-save-button.error {
-        background: #c2413b;
+      button.chapter-save-button.error {
+        background: #c2413b !important;
       }
 
       @media (max-width: 720px) {
+        .chapter-toolbar {
+          align-items: center;
+        }
+
         .chapter-toolbar-actions {
-          width: 100%;
-          flex-direction: column;
-          align-items: stretch;
+          width: auto !important;
+          flex-direction: row !important;
+          align-items: center !important;
         }
 
         .chapter-toolbar-actions label {
-          min-width: 0;
-          width: 100%;
+          width: auto !important;
+          min-width: 190px;
         }
 
-        .chapter-save-button {
-          width: 100%;
+        button.chapter-save-button {
+          width: auto !important;
+          min-width: 126px;
         }
       }
 
