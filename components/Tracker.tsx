@@ -8,7 +8,7 @@ import {
   CalendarDays,
   Check,
   ChevronRight,
-  ClipboardCheck
+  ClipboardCheck,
   Clock3,
   FileText,
   Flame,
