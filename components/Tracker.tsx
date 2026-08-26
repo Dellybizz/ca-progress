@@ -11,6 +11,8 @@ import {
   useState,
 } from "react";
 
+import { useRouter } from "next/navigation";
+
 import {
   Activity,
   Bell,
@@ -192,6 +194,20 @@ const menu: {
 ];
 
 const publicViews: View[] = ["Dashboard", "Subjects", "Chapters"];
+
+const viewRoutes: Record<View, string> = {
+  Dashboard: "/dashboard",
+  Subjects: "/subjects",
+  Chapters: "/chapters",
+  Analytics: "/analytics",
+  "Study Sessions": "/study-sessions",
+  Goals: "/goals",
+  "Test Series": "/test-series",
+  Calendar: "/calendar",
+  Activity: "/activity",
+  Notes: "/notes",
+  Settings: "/settings",
+};
 
 const subjectMeta: Record<
   SubjectName,
@@ -769,6 +785,8 @@ function TrackerDashboard({
   onLogout: () => void;
   onRequireAuth: () => void;
 }) {
+  const router = useRouter();
+
   const subjects =
     Object.keys(
       syllabus
@@ -807,16 +825,25 @@ function TrackerDashboard({
   useEffect(() => {
     if (!userId && !publicViews.includes(view)) {
       setView("Dashboard");
+      router.replace(viewRoutes.Dashboard);
     }
-  }, [userId, view]);
+  }, [router, userId, view]);
+
+  useEffect(() => {
+    if (userId || publicViews.includes(initialView)) {
+      setView(initialView);
+    }
+  }, [initialView, userId]);
 
   const [
     activeSubject,
     setActiveSubject,
   ] =
-    useState<SubjectName>(
-      subjects[0]
-    );
+    useState<SubjectName>(() => {
+      if (typeof window === "undefined") return subjects[0];
+      const saved = window.localStorage.getItem("ca-progress-subject") as SubjectName | null;
+      return saved && subjects.includes(saved) ? saved : subjects[0];
+    });
 
   const [progress, setProgress] =
     useState<Progress>({});
@@ -1148,8 +1175,8 @@ function TrackerDashboard({
       return;
     }
 
-    setView(label);
     window.localStorage.setItem("ca-progress-view", label);
+    router.push(viewRoutes[label]);
 
     setSidebarOpen(
       false
@@ -1340,11 +1367,7 @@ function TrackerDashboard({
             studyHours={
               userId ? studyHours : [0, 0, 0, 0, 0, 0, 0]
             }
-            onSubjects={() =>
-              setView(
-                "Subjects"
-              )
-            }
+            onSubjects={() => nav("Subjects")}
             onQuickStudy={() => nav("Study Sessions")}
             onQuickTest={() => nav("Test Series")}
             onQuickGoal={() => nav("Goals")}
@@ -1368,10 +1391,8 @@ function TrackerDashboard({
               setActiveSubject(
                 subject
               );
-
-              setView(
-                "Chapters"
-              );
+              window.localStorage.setItem("ca-progress-subject", subject);
+              nav("Chapters");
             }}
           />
         )}
@@ -1409,6 +1430,7 @@ function TrackerDashboard({
             saveStatus={
               saveStatus
             }
+            onBack={() => nav("Subjects")}
           />
         )}
 
@@ -1956,6 +1978,7 @@ function ChaptersView({
   subjectStats,
   onSaveProgress,
   saveStatus,
+  onBack,
 }: {
   subjects: SubjectName[];
   activeSubject: SubjectName;
@@ -1981,6 +2004,7 @@ function ChaptersView({
   };
   onSaveProgress: () => void;
   saveStatus: "idle" | "saving" | "saved" | "error";
+  onBack: () => void;
 }) {
   const rows =
     syllabus[
@@ -2003,7 +2027,7 @@ function ChaptersView({
     <section className="chapters-page">
       <div className="chapter-top">
         <div>
-          <button className="back-link">
+          <button className="back-link" onClick={onBack}>
             ‹ Back to Subjects
           </button>
 
@@ -2033,14 +2057,11 @@ function ChaptersView({
           value={
             activeSubject
           }
-          onChange={(
-            event
-          ) =>
-            setActiveSubject(
-              event.target
-                .value as SubjectName
-            )
-          }
+          onChange={(event) => {
+            const subject = event.target.value as SubjectName;
+            setActiveSubject(subject);
+            window.localStorage.setItem("ca-progress-subject", subject);
+          }}
         >
           {subjects.map(
             (subject) => (
