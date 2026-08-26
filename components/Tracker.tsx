@@ -2,7 +2,9 @@
 
 import {
   FormEvent,
+  Dispatch,
   ReactNode,
+  SetStateAction,
   useEffect,
   useMemo,
   useRef,
@@ -84,6 +86,12 @@ type ActivityItem = {
   stage: Stage;
   time: string;
 };
+
+type StudySessionItem = { id: string; subject: SubjectName; minutes: number; date: string };
+type GoalItem = { id: string; title: string; dueDate: string; completed: boolean };
+type TestItem = { id: string; subject: SubjectName; score: number; maxScore: number; date: string };
+type CalendarItem = { id: string; title: string; date: string };
+type NoteItem = { id: string; title: string; body: string; updatedAt: string };
 
 type View =
   | "Dashboard"
@@ -182,6 +190,8 @@ const menu: {
     icon: Settings,
   },
 ];
+
+const publicViews: View[] = ["Dashboard", "Subjects", "Chapters"];
 
 const subjectMeta: Record<
   SubjectName,
@@ -784,13 +794,21 @@ function TrackerDashboard({
 
   const [view, setView] =
     useState<View>(() => {
+      if (!userId && !publicViews.includes(initialView)) return "Dashboard";
       if (initialView !== "Dashboard") return initialView;
       if (typeof window === "undefined") return initialView;
       const savedView = window.localStorage.getItem("ca-progress-view") as View | null;
-      return menu.some((item) => item.label === savedView)
+      return menu.some((item) => item.label === savedView) &&
+        (Boolean(userId) || publicViews.includes(savedView as View))
         ? savedView!
         : initialView;
     });
+
+  useEffect(() => {
+    if (!userId && !publicViews.includes(view)) {
+      setView("Dashboard");
+    }
+  }, [userId, view]);
 
   const [
     activeSubject,
@@ -802,6 +820,12 @@ function TrackerDashboard({
 
   const [progress, setProgress] =
     useState<Progress>({});
+
+  const [studySessions, setStudySessions] = useState<StudySessionItem[]>([]);
+  const [goals, setGoals] = useState<GoalItem[]>([]);
+  const [tests, setTests] = useState<TestItem[]>([]);
+  const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
+  const [notes, setNotes] = useState<NoteItem[]>([]);
 
   const [search, setSearch] =
     useState("");
@@ -890,11 +914,21 @@ function TrackerDashboard({
           progress?: Progress;
           activities?: ActivityItem[];
           studyHours?: number[];
+          studySessions?: StudySessionItem[];
+          goals?: GoalItem[];
+          tests?: TestItem[];
+          calendarItems?: CalendarItem[];
+          notes?: NoteItem[];
         };
 
         setProgress(saved.progress || {});
         setActivities(saved.activities || []);
         setStudyHours(saved.studyHours || defaultStudyHours);
+        setStudySessions(saved.studySessions || []);
+        setGoals(saved.goals || []);
+        setTests(saved.tests || []);
+        setCalendarItems(saved.calendarItems || []);
+        setNotes(saved.notes || []);
       }
 
       dataReadyRef.current = true;
@@ -923,7 +957,16 @@ function TrackerDashboard({
     setSaveStatus("saving");
     const { error } = await supabase.from("user_progress").upsert({
       user_id: userId,
-      progress: { progress, activities, studyHours },
+      progress: {
+        progress,
+        activities,
+        studyHours,
+        studySessions,
+        goals,
+        tests,
+        calendarItems,
+        notes,
+      },
       updated_at: new Date().toISOString(),
     }, { onConflict: "user_id" });
 
@@ -1099,12 +1142,6 @@ function TrackerDashboard({
   const nav = (
     label: View
   ) => {
-    const publicViews: View[] = [
-      "Dashboard",
-      "Subjects",
-      "Chapters",
-    ];
-
     if (!userId && !publicViews.includes(label)) {
       onRequireAuth();
       setSidebarOpen(false);
@@ -1242,13 +1279,13 @@ function TrackerDashboard({
           </div>
 
           <div className="top-actions">
-            <button className="icon-button">
+            <button className="icon-button" onClick={() => nav("Chapters")} title="Search chapters">
               <Search
                 size={19}
               />
             </button>
 
-            <button className="icon-button">
+            <button className="icon-button" onClick={() => nav("Activity")} title="View activity">
               <Bell
                 size={19}
               />
@@ -1273,7 +1310,7 @@ function TrackerDashboard({
               </button>
             )}
 
-            <button className="avatar large">
+            <button className="avatar large" onClick={() => nav("Settings")} title="Account settings">
               {initial}
             </button>
           </div>
@@ -1301,52 +1338,18 @@ function TrackerDashboard({
               activities
             }
             studyHours={
-              studyHours
+              userId ? studyHours : [0, 0, 0, 0, 0, 0, 0]
             }
             onSubjects={() =>
               setView(
                 "Subjects"
               )
             }
-            onQuickStudy={() => {
-              if (!userId) {
-                onRequireAuth();
-                return;
-              }
-
-              setStudyHours(
-                (hours) => [
-                  ...hours.slice(
-                    0,
-                    6
-                  ),
-                  Number(
-                    (
-                      hours[6] +
-                      0.5
-                    ).toFixed(1)
-                  ),
-                ]
-              );
-
-              flash(
-                "30 minutes added to today"
-              );
-            }}
-            onQuickTest={() => {
-              setView(
-                "Chapters"
-              );
-
-              flash(
-                "Pick a chapter and mark its test complete"
-              );
-            }}
-            onViewAll={() =>
-              setView(
-                "Activity"
-              )
-            }
+            onQuickStudy={() => nav("Study Sessions")}
+            onQuickTest={() => nav("Test Series")}
+            onQuickGoal={() => nav("Goals")}
+            onQuickCalendar={() => nav("Calendar")}
+            onViewAll={() => nav("Activity")}
           />
         )}
 
@@ -1442,6 +1445,61 @@ function TrackerDashboard({
           />
         )}
 
+        {view === "Study Sessions" && (
+          <StudySessionsView
+            subjects={subjects}
+            items={studySessions}
+            setItems={setStudySessions}
+            onAddMinutes={(minutes) => setStudyHours((hours) => [
+              ...hours.slice(0, 6),
+              Number((hours[6] + minutes / 60).toFixed(1)),
+            ])}
+            onDeleteMinutes={(minutes) => setStudyHours((hours) => [
+              ...hours.slice(0, 6),
+              Math.max(0, Number((hours[6] - minutes / 60).toFixed(1))),
+            ])}
+            onSave={saveProgress}
+            saveStatus={saveStatus}
+          />
+        )}
+
+        {view === "Goals" && (
+          <GoalsView
+            items={goals}
+            setItems={setGoals}
+            onSave={saveProgress}
+            saveStatus={saveStatus}
+          />
+        )}
+
+        {view === "Test Series" && (
+          <TestsView
+            subjects={subjects}
+            items={tests}
+            setItems={setTests}
+            onSave={saveProgress}
+            saveStatus={saveStatus}
+          />
+        )}
+
+        {view === "Calendar" && (
+          <CalendarView
+            items={calendarItems}
+            setItems={setCalendarItems}
+            onSave={saveProgress}
+            saveStatus={saveStatus}
+          />
+        )}
+
+        {view === "Notes" && (
+          <NotesView
+            items={notes}
+            setItems={setNotes}
+            onSave={saveProgress}
+            saveStatus={saveStatus}
+          />
+        )}
+
         {view ===
           "Settings" && (
           <SettingsView
@@ -1454,28 +1512,6 @@ function TrackerDashboard({
           />
         )}
 
-        {(
-          [
-            "Study Sessions",
-            "Goals",
-            "Test Series",
-            "Calendar",
-            "Notes",
-          ] as View[]
-        ).includes(
-          view
-        ) && (
-          <ComingSoon
-            view={
-              view
-            }
-            onDashboard={() =>
-              setView(
-                "Dashboard"
-              )
-            }
-          />
-        )}
       </section>
     </main>
   );
@@ -1496,60 +1532,11 @@ function Dashboard({
   onSubjects,
   onQuickStudy,
   onQuickTest,
+  onQuickGoal,
+  onQuickCalendar,
   onViewAll,
 }: any) {
-  const recent =
-    activities.length
-      ? activities.slice(
-          0,
-          4
-        )
-      : [
-          {
-            id: "1",
-            subject:
-              "Advanced Accounting",
-            chapter:
-              "Accounting for Partnership Firms – Fundamentals",
-            stage:
-              "done",
-            time:
-              "Start here",
-          },
-          {
-            id: "2",
-            subject:
-              "Corporate and Other Laws",
-            chapter:
-              "Indian Contract Act, 1872 – Essentials",
-            stage:
-              "revision1",
-            time:
-              "Track revisions",
-          },
-          {
-            id: "3",
-            subject:
-              "Taxation",
-            chapter:
-              "Income Tax – Residential Status",
-            stage:
-              "revision2",
-            time:
-              "Stay consistent",
-          },
-          {
-            id: "4",
-            subject:
-              "Cost and Management Accounting",
-            chapter:
-              "Marginal Costing",
-            stage:
-              "testDone",
-            time:
-              "Complete tests",
-          },
-        ];
+  const recent = activities.slice(0, 4);
 
   return (
     <>
@@ -1814,7 +1801,7 @@ function Dashboard({
             </button>
           </div>
 
-          {recent.map(
+          {recent.length ? recent.map(
             (
               item: ActivityItem
             ) => (
@@ -1827,7 +1814,7 @@ function Dashboard({
                 }
               />
             )
-          )}
+          ) : <div className="dashboard-empty">No saved activity yet.</div>}
         </section>
 
         <section className="panel quick-panel">
@@ -1860,7 +1847,7 @@ function Dashboard({
               </span>
             </button>
 
-            <button>
+            <button onClick={onQuickGoal}>
               <Goal />
 
               <span>
@@ -1868,7 +1855,7 @@ function Dashboard({
               </span>
             </button>
 
-            <button>
+            <button onClick={onQuickCalendar}>
               <CalendarDays />
 
               <span>
@@ -2483,6 +2470,111 @@ function ActivityView({
       </section>
     </section>
   );
+}
+
+/* =========================================================
+   PERSONALISED WORKSPACE PAGES
+========================================================= */
+
+type SaveStatus = "idle" | "saving" | "saved" | "error";
+
+function WorkspaceHeader({ title, text, onSave, saveStatus }: {
+  title: string;
+  text: string;
+  onSave: () => void;
+  saveStatus: SaveStatus;
+}) {
+  return (
+    <div className="page-heading workspace-heading">
+      <div><h2>{title}</h2><p>{text}</p></div>
+      <button className={`workspace-save ${saveStatus}`} onClick={onSave} disabled={saveStatus === "saving"}>
+        {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved ✓" : saveStatus === "error" ? "Try Again" : "Save Changes"}
+      </button>
+    </div>
+  );
+}
+
+function StudySessionsView({ subjects, items, setItems, onAddMinutes, onDeleteMinutes, onSave, saveStatus }: {
+  subjects: SubjectName[];
+  items: StudySessionItem[];
+  setItems: Dispatch<SetStateAction<StudySessionItem[]>>;
+  onAddMinutes: (minutes: number) => void;
+  onDeleteMinutes: (minutes: number) => void;
+  onSave: () => void;
+  saveStatus: SaveStatus;
+}) {
+  const [subject, setSubject] = useState<SubjectName>(subjects[0]);
+  const [minutes, setMinutes] = useState("30");
+  const add = (event: FormEvent) => {
+    event.preventDefault();
+    const value = Number(minutes);
+    if (!value || value < 1) return;
+    setItems((current) => [{ id: crypto.randomUUID(), subject, minutes: value, date: new Date().toISOString() }, ...current]);
+    onAddMinutes(value);
+    setMinutes("30");
+  };
+  const total = items.reduce((sum, item) => sum + item.minutes, 0);
+  return (
+    <section className="single-page workspace-page">
+      <WorkspaceHeader title="Study Sessions" text="Log focused study time by subject." onSave={onSave} saveStatus={saveStatus} />
+      <div className="workspace-summary"><b>{Math.floor(total / 60)}h {total % 60}m</b><span>Total focused time</span></div>
+      <form className="workspace-form panel" onSubmit={add}>
+        <select value={subject} onChange={(e) => setSubject(e.target.value as SubjectName)}>{subjects.map((item) => <option key={item}>{item}</option>)}</select>
+        <input type="number" min="1" max="1440" value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="Minutes" required />
+        <button type="submit"><Plus size={16} /> Add Session</button>
+      </form>
+      <WorkspaceList empty="No study sessions logged yet.">{items.map((item) => <WorkspaceRow key={item.id} title={item.subject} meta={`${item.minutes} minutes • ${new Date(item.date).toLocaleDateString()}`} onDelete={() => { setItems((all) => all.filter((entry) => entry.id !== item.id)); onDeleteMinutes(item.minutes); }} />)}</WorkspaceList>
+    </section>
+  );
+}
+
+function GoalsView({ items, setItems, onSave, saveStatus }: {
+  items: GoalItem[]; setItems: Dispatch<SetStateAction<GoalItem[]>>; onSave: () => void; saveStatus: SaveStatus;
+}) {
+  const [title, setTitle] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const add = (event: FormEvent) => { event.preventDefault(); if (!title.trim()) return; setItems((all) => [{ id: crypto.randomUUID(), title: title.trim(), dueDate, completed: false }, ...all]); setTitle(""); setDueDate(""); };
+  return (
+    <section className="single-page workspace-page">
+      <WorkspaceHeader title="Goals" text="Set clear preparation targets and mark them complete." onSave={onSave} saveStatus={saveStatus} />
+      <form className="workspace-form panel" onSubmit={add}><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Goal title" required /><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /><button type="submit"><Plus size={16} /> Add Goal</button></form>
+      <WorkspaceList empty="No goals added yet.">{items.map((item) => <div className={`workspace-row ${item.completed ? "complete" : ""}`} key={item.id}><button className="workspace-check" onClick={() => setItems((all) => all.map((goal) => goal.id === item.id ? { ...goal, completed: !goal.completed } : goal))}>{item.completed ? <Check size={14} /> : null}</button><div><b>{item.title}</b><span>{item.dueDate ? `Due ${new Date(`${item.dueDate}T00:00:00`).toLocaleDateString()}` : "No due date"}</span></div><button className="workspace-delete" onClick={() => setItems((all) => all.filter((goal) => goal.id !== item.id))}>Delete</button></div>)}</WorkspaceList>
+    </section>
+  );
+}
+
+function TestsView({ subjects, items, setItems, onSave, saveStatus }: {
+  subjects: SubjectName[]; items: TestItem[]; setItems: Dispatch<SetStateAction<TestItem[]>>; onSave: () => void; saveStatus: SaveStatus;
+}) {
+  const [subject, setSubject] = useState<SubjectName>(subjects[0]); const [score, setScore] = useState(""); const [maxScore, setMaxScore] = useState("100");
+  const add = (event: FormEvent) => { event.preventDefault(); const scored = Number(score); const maximum = Number(maxScore); if (scored < 0 || maximum < 1 || scored > maximum) return; setItems((all) => [{ id: crypto.randomUUID(), subject, score: scored, maxScore: maximum, date: new Date().toISOString() }, ...all]); setScore(""); };
+  return (
+    <section className="single-page workspace-page"><WorkspaceHeader title="Test Series" text="Record mock-test scores and monitor improvement." onSave={onSave} saveStatus={saveStatus} />
+      <form className="workspace-form panel" onSubmit={add}><select value={subject} onChange={(e) => setSubject(e.target.value as SubjectName)}>{subjects.map((item) => <option key={item}>{item}</option>)}</select><input type="number" min="0" value={score} onChange={(e) => setScore(e.target.value)} placeholder="Score" required /><input type="number" min="1" value={maxScore} onChange={(e) => setMaxScore(e.target.value)} placeholder="Out of" required /><button type="submit"><Plus size={16} /> Add Result</button></form>
+      <WorkspaceList empty="No test results recorded yet.">{items.map((item) => <WorkspaceRow key={item.id} title={item.subject} meta={`${item.score}/${item.maxScore} • ${Math.round(item.score / item.maxScore * 100)}% • ${new Date(item.date).toLocaleDateString()}`} onDelete={() => setItems((all) => all.filter((entry) => entry.id !== item.id))} />)}</WorkspaceList>
+    </section>
+  );
+}
+
+function CalendarView({ items, setItems, onSave, saveStatus }: { items: CalendarItem[]; setItems: Dispatch<SetStateAction<CalendarItem[]>>; onSave: () => void; saveStatus: SaveStatus; }) {
+  const [title, setTitle] = useState(""); const [date, setDate] = useState("");
+  const add = (event: FormEvent) => { event.preventDefault(); if (!title.trim() || !date) return; setItems((all) => [...all, { id: crypto.randomUUID(), title: title.trim(), date }].sort((a, b) => a.date.localeCompare(b.date))); setTitle(""); setDate(""); };
+  return <section className="single-page workspace-page"><WorkspaceHeader title="Calendar" text="Schedule tests, revision days and study deadlines." onSave={onSave} saveStatus={saveStatus} /><form className="workspace-form panel" onSubmit={add}><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Event title" required /><input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /><button type="submit"><Plus size={16} /> Add Event</button></form><WorkspaceList empty="No calendar events yet.">{items.map((item) => <WorkspaceRow key={item.id} title={item.title} meta={new Date(`${item.date}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })} onDelete={() => setItems((all) => all.filter((entry) => entry.id !== item.id))} />)}</WorkspaceList></section>;
+}
+
+function NotesView({ items, setItems, onSave, saveStatus }: { items: NoteItem[]; setItems: Dispatch<SetStateAction<NoteItem[]>>; onSave: () => void; saveStatus: SaveStatus; }) {
+  const [title, setTitle] = useState(""); const [body, setBody] = useState("");
+  const add = (event: FormEvent) => { event.preventDefault(); if (!title.trim() || !body.trim()) return; setItems((all) => [{ id: crypto.randomUUID(), title: title.trim(), body: body.trim(), updatedAt: new Date().toISOString() }, ...all]); setTitle(""); setBody(""); };
+  return <section className="single-page workspace-page"><WorkspaceHeader title="Notes" text="Keep concise preparation notes synced to your account." onSave={onSave} saveStatus={saveStatus} /><form className="workspace-form notes-form panel" onSubmit={add}><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Note title" required /><textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write your note..." required /><button type="submit"><Plus size={16} /> Add Note</button></form><div className="notes-grid">{items.length ? items.map((item) => <article className="note-card panel" key={item.id}><h3>{item.title}</h3><p>{item.body}</p><footer><span>{new Date(item.updatedAt).toLocaleDateString()}</span><button onClick={() => setItems((all) => all.filter((entry) => entry.id !== item.id))}>Delete</button></footer></article>) : <div className="workspace-empty panel">No notes created yet.</div>}</div></section>;
+}
+
+function WorkspaceList({ children, empty }: { children: ReactNode; empty: string }) {
+  const hasItems = Array.isArray(children) ? children.length > 0 : Boolean(children);
+  return <section className="workspace-list panel">{hasItems ? children : <div className="workspace-empty">{empty}</div>}</section>;
+}
+
+function WorkspaceRow({ title, meta, onDelete }: { title: string; meta: string; onDelete: () => void }) {
+  return <div className="workspace-row"><div><b>{title}</b><span>{meta}</span></div><button className="workspace-delete" onClick={onDelete}>Delete</button></div>;
 }
 
 /* =========================================================
