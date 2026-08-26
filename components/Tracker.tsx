@@ -258,7 +258,7 @@ const defaultStudyHours = [
    MAIN COMPONENT
 ========================================================= */
 
-export default function Tracker({ initialView = "Dashboard" }: { initialView?: View }) {
+export default function Tracker() {
   const [session, setSession] =
     useState<Session | null>(null);
 
