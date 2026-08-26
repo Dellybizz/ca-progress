@@ -570,7 +570,8 @@ export default function Tracker() {
                   />
                 </label>
 
-                <label>
+                <div className="chapter-toolbar-actions">
+        <label>
                   Password
 
                   <input
@@ -812,6 +813,9 @@ function TrackerDashboard({
   const [dataReady, setDataReady] =
     useState(false);
 
+  const [saveStatus, setSaveStatus] =
+    useState<"idle" | "saving" | "saved" | "error">("idle");
+
 
   useEffect(() => {
     let cancelled = false;
@@ -863,47 +867,37 @@ function TrackerDashboard({
 
 
 
-  useEffect(() => {
+
+
+  const saveProgress = async () => {
     if (!supabase || !userId || !dataReady) return;
 
-    const saveTimer = window.setTimeout(async () => {
-      const payload = {
-        progress,
-        activities,
-        studyHours,
-      };
+    setSaveStatus("saving");
 
-      const { error } = await supabase
-        .from("user_progress")
-        .upsert(
-          {
-            user_id: userId,
-            progress: payload,
-            updated_at: new Date().toISOString(),
+    const { error } = await supabase
+      .from("user_progress")
+      .upsert(
+        {
+          user_id: userId,
+          progress: {
+            progress,
+            activities,
+            studyHours,
           },
-          {
-            onConflict: "user_id",
-          }
-        );
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
 
-      if (error) {
-        console.error(
-          "Unable to automatically save progress:",
-          error.message
-        );
-      }
-    }, 700);
+    if (error) {
+      console.error("Unable to save progress:", error.message);
+      setSaveStatus("error");
+      return;
+    }
 
-    return () => {
-      window.clearTimeout(saveTimer);
-    };
-  }, [
-    userId,
-    progress,
-    activities,
-    studyHours,
-    dataReady,
-  ]);
+    setSaveStatus("saved");
+    window.setTimeout(() => setSaveStatus("idle"), 1800);
+  };
 
   useEffect(() => {
     window.localStorage.setItem("ca-progress-view", view);
@@ -1341,6 +1335,12 @@ function TrackerDashboard({
             }
             subjectStats={
               subjectStats
+            }
+            onSaveProgress={
+              saveProgress
+            }
+            saveStatus={
+              saveStatus
             }
           />
         )}
@@ -1903,6 +1903,8 @@ function ChaptersView({
   progress,
   toggle,
   subjectStats,
+  onSaveProgress,
+  saveStatus,
 }: {
   subjects: SubjectName[];
   activeSubject: SubjectName;
@@ -2041,6 +2043,22 @@ function ChaptersView({
               placeholder="Search chapters"
             />
           </label>
+
+        <button
+          type="button"
+          className={`chapter-save-button ${saveStatus}`}
+          onClick={onSaveProgress}
+          disabled={saveStatus === "saving"}
+        >
+          {saveStatus === "saving"
+            ? "Saving..."
+            : saveStatus === "saved"
+              ? "Saved ✓"
+              : saveStatus === "error"
+                ? "Try Again"
+                : "Save Progress"}
+        </button>
+        </div>
         </div>
       </div>
 
@@ -3097,6 +3115,84 @@ function AuthStyles() {
         justify-content: space-between !important;
         gap: 12px !important;
         flex-wrap: nowrap !important;
+      }
+
+      .chapter-toolbar-actions {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 10px !important;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .chapter-toolbar-actions label {
+        display: flex !important;
+        align-items: center !important;
+        flex: 1 1 auto;
+        min-width: 0 !important;
+        margin: 0 !important;
+      }
+
+      .chapter-toolbar-actions input {
+        min-width: 0 !important;
+        width: 100%;
+      }
+
+      button.chapter-save-button {
+        appearance: none !important;
+        -webkit-appearance: none !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        flex: 0 0 auto !important;
+        min-width: 132px !important;
+        height: 40px !important;
+        padding: 0 18px !important;
+        border: none !important;
+        border-radius: 9px !important;
+        background: #3568b8 !important;
+        color: #ffffff !important;
+        font-size: 13px !important;
+        font-weight: 700 !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+        cursor: pointer;
+      }
+
+      button.chapter-save-button:disabled {
+        opacity: 0.75;
+        cursor: wait;
+      }
+
+      button.chapter-save-button.saved {
+        background: #2f8a63 !important;
+      }
+
+      button.chapter-save-button.error {
+        background: #c2413b !important;
+      }
+
+      @media (max-width: 720px) {
+        .chapter-toolbar-actions {
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: center !important;
+          gap: 8px !important;
+          width: 100% !important;
+        }
+
+        .chapter-toolbar-actions label {
+          flex: 1 1 auto !important;
+          min-width: 0 !important;
+        }
+
+        button.chapter-save-button {
+          flex: 0 0 auto !important;
+          min-width: 126px !important;
+          height: 40px !important;
+          padding: 0 14px !important;
+        }
       }
 
       .logout-button {
