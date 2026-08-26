@@ -739,9 +739,13 @@ function TrackerDashboard({
   );
 
   const [view, setView] =
-    useState<View>(
-      "Dashboard"
-    );
+    useState<View>(() => {
+      if (typeof window === "undefined") return "Dashboard";
+      const savedView = window.localStorage.getItem("ca-progress-view") as View | null;
+      return menu.some((item) => item.label === savedView)
+        ? savedView!
+        : "Dashboard";
+    });
 
   const [
     activeSubject,
@@ -805,6 +809,9 @@ function TrackerDashboard({
   const dataReadyRef =
     useRef(false);
 
+  const [dataReady, setDataReady] =
+    useState(false);
+
   const saveTimerRef =
     useRef<number | null>(null);
 
@@ -812,9 +819,11 @@ function TrackerDashboard({
     let cancelled = false;
 
     dataReadyRef.current = false;
+    setDataReady(false);
 
     if (!supabase || !userId) {
       dataReadyRef.current = true;
+      setDataReady(true);
       return;
     }
 
@@ -843,6 +852,7 @@ function TrackerDashboard({
       }
 
       dataReadyRef.current = true;
+      setDataReady(true);
     };
 
     loadUserData();
@@ -853,7 +863,7 @@ function TrackerDashboard({
   }, [userId]);
 
   useEffect(() => {
-    if (!supabase || !userId || !dataReadyRef.current) return;
+    if (!supabase || !userId || !dataReady) return;
 
     if (saveTimerRef.current) {
       window.clearTimeout(saveTimerRef.current);
@@ -881,7 +891,11 @@ function TrackerDashboard({
         window.clearTimeout(saveTimerRef.current);
       }
     };
-  }, [userId, progress, activities, studyHours]);
+  }, [userId, progress, activities, studyHours, dataReady]);
+
+  useEffect(() => {
+    window.localStorage.setItem("ca-progress-view", view);
+  }, [view]);
 
   /* =======================================================
      STATS
@@ -1040,6 +1054,7 @@ function TrackerDashboard({
     label: View
   ) => {
     setView(label);
+    window.localStorage.setItem("ca-progress-view", label);
 
     setSidebarOpen(
       false
