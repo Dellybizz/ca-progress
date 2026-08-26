@@ -5,6 +5,7 @@ import {
   ReactNode,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -659,6 +660,9 @@ export default function Tracker() {
       email={
         session.user.email || ""
       }
+      userId={
+        session.user.id
+      }
       onLogout={
         handleLogout
       }
@@ -704,9 +708,11 @@ function AuthFeature({
 
 function TrackerDashboard({
   email,
+  userId,
   onLogout,
 }: {
   email: string;
+  userId: string;
   onLogout: () => void;
 }) {
   const subjects =
@@ -793,69 +799,89 @@ function TrackerDashboard({
       .toUpperCase() || "C";
 
   /* =======================================================
-     LOAD USER DATA
+     SUPABASE USER DATA
   ======================================================= */
 
+  const dataReadyRef =
+    useRef(false);
+
+  const saveTimerRef =
+    useRef<number | null>(null);
+
   useEffect(() => {
-    const storageKey =
-      `ca-progress-data-v3-${email}`;
+    let cancelled = false;
 
-    const saved =
-      window.localStorage.getItem(
-        storageKey
-      );
+    dataReadyRef.current = false;
 
-    if (!saved) {
+    if (!supabase || !userId) {
+      dataReadyRef.current = true;
       return;
     }
 
-    try {
-      const data =
-        JSON.parse(saved);
+    const loadUserData = async () => {
+      const { data, error } =
+        await supabase
+          .from("user_progress")
+          .select("progress")
+          .eq("user_id", userId)
+          .maybeSingle();
 
-      setProgress(
-        data.progress || {}
-      );
+      if (cancelled) return;
 
-      setActivities(
-        data.activities || []
-      );
+      if (error) {
+        console.error("Unable to load progress:", error.message);
+      } else if (data?.progress) {
+        const saved = data.progress as {
+          progress?: Progress;
+          activities?: ActivityItem[];
+          studyHours?: number[];
+        };
 
-      setStudyHours(
-        data.studyHours ||
-          defaultStudyHours
-      );
-    } catch {
-      // Ignore malformed local data
-    }
-  }, [email]);
+        setProgress(saved.progress || {});
+        setActivities(saved.activities || []);
+        setStudyHours(saved.studyHours || defaultStudyHours);
+      }
 
-  /* =======================================================
-     SAVE USER DATA
-  ======================================================= */
+      dataReadyRef.current = true;
+    };
+
+    loadUserData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   useEffect(() => {
-    if (!email) {
-      return;
+    if (!supabase || !userId || !dataReadyRef.current) return;
+
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
     }
 
-    const storageKey =
-      `ca-progress-data-v3-${email}`;
+    saveTimerRef.current = window.setTimeout(async () => {
+      const { error } = await supabase
+        .from("user_progress")
+        .upsert(
+          {
+            user_id: userId,
+            progress: { progress, activities, studyHours },
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id" }
+        );
 
-    window.localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        progress,
-        activities,
-        studyHours,
-      })
-    );
-  }, [
-    email,
-    progress,
-    activities,
-    studyHours,
-  ]);
+      if (error) {
+        console.error("Unable to save progress:", error.message);
+      }
+    }, 500);
+
+    return () => {
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [userId, progress, activities, studyHours]);
 
   /* =======================================================
      STATS
