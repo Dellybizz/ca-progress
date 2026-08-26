@@ -2031,8 +2031,22 @@ function ChaptersView({
           {rows.length} Chapters
         </div>
 
-        <div className="chapter-toolbar-actions">
-          <label>
+        <div
+          className="chapter-toolbar-actions"
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: "10px",
+            flexWrap: "nowrap",
+          }}
+        >
+          <label
+            style={{
+              margin: 0,
+              minWidth: "272px",
+            }}
+          >
             <Search
               size={16}
             />
@@ -2055,17 +2069,47 @@ function ChaptersView({
 
           <button
             type="button"
-            className={`chapter-save-button ${saveStatus}`}
             onClick={onSaveProgress}
             disabled={saveStatus === "saving"}
+            style={{
+              appearance: "none",
+              WebkitAppearance: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: "40px",
+              minWidth: "136px",
+              padding: "0 18px",
+              border: "none",
+              borderRadius: "9px",
+              background:
+                saveStatus === "saved"
+                  ? "#2f8a63"
+                  : saveStatus === "error"
+                    ? "#c2413b"
+                    : "#3568b8",
+              color: "#ffffff",
+              fontSize: "13px",
+              fontWeight: 700,
+              lineHeight: 1,
+              cursor:
+                saveStatus === "saving"
+                  ? "wait"
+                  : "pointer",
+              opacity:
+                saveStatus === "saving"
+                  ? 0.75
+                  : 1,
+              whiteSpace: "nowrap",
+              boxShadow:
+                "0 4px 12px rgba(53, 104, 184, 0.18)",
+            }}
           >
             {saveStatus === "saving"
               ? "Saving..."
               : saveStatus === "saved"
                 ? "Saved ✓"
-                : saveStatus === "error"
-                  ? "Try Again"
-                  : "Save Progress"}
+                : "Save Progress"}
           </button>
         </div>
       </div>
