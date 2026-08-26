@@ -23,6 +23,7 @@ import {
   Goal,
   Home,
   LineChart,
+  LogIn,
   LogOut,
   Menu,
   NotebookPen,
@@ -287,6 +288,9 @@ export default function Tracker({
   const [submitting, setSubmitting] =
     useState(false);
 
+  const [guestMode, setGuestMode] =
+    useState(false);
+
   /* =======================================================
      CHECK LOGIN SESSION
   ======================================================= */
@@ -325,6 +329,10 @@ export default function Tracker({
             setSession(
               newSession
             );
+
+            if (newSession) {
+              setGuestMode(false);
+            }
 
             setAuthLoading(false);
           }
@@ -465,7 +473,7 @@ export default function Tracker({
      AUTH SCREEN
   ======================================================= */
 
-  if (!session) {
+  if (!session && !guestMode) {
     return (
       <>
         <div className="auth-page">
@@ -640,6 +648,23 @@ export default function Tracker({
                 </button>
               </div>
 
+              <button
+                type="button"
+                className="auth-guest"
+                onClick={() => {
+                  setAuthError("");
+                  setAuthMessage("");
+                  setGuestMode(true);
+                }}
+              >
+                Continue without an account
+              </button>
+
+              <p className="auth-guest-note">
+                Browse subjects and chapters freely. Sign in only when you want
+                to track and save your progress.
+              </p>
+
               {!supabase && (
                 <div className="auth-config-warning">
                   Supabase environment variables
@@ -665,14 +690,22 @@ export default function Tracker({
         initialView
       }
       email={
-        session.user.email || ""
+        session?.user.email || ""
       }
       userId={
-        session.user.id
+        session?.user.id || null
       }
       onLogout={
         handleLogout
       }
+      onRequireAuth={() => {
+        setAuthMode("login");
+        setAuthError("");
+        setAuthMessage(
+          "Sign in or create an account to track and save your progress."
+        );
+        setGuestMode(false);
+      }}
     />
   );
 }
@@ -718,11 +751,13 @@ function TrackerDashboard({
   email,
   userId,
   onLogout,
+  onRequireAuth,
 }: {
   initialView: View;
   email: string;
-  userId: string;
+  userId: string | null;
   onLogout: () => void;
+  onRequireAuth: () => void;
 }) {
   const subjects =
     Object.keys(
@@ -879,7 +914,12 @@ function TrackerDashboard({
 
 
   const saveProgress = async () => {
-    if (!supabase || !userId || !dataReady) return;
+    if (!userId) {
+      onRequireAuth();
+      return;
+    }
+
+    if (!supabase || !dataReady) return;
     setSaveStatus("saving");
     const { error } = await supabase.from("user_progress").upsert({
       user_id: userId,
@@ -996,6 +1036,11 @@ function TrackerDashboard({
     chapter: string,
     stage: Stage
   ) => {
+    if (!userId) {
+      onRequireAuth();
+      return;
+    }
+
     const key =
       keyFor(
         subject,
@@ -1054,6 +1099,18 @@ function TrackerDashboard({
   const nav = (
     label: View
   ) => {
+    const publicViews: View[] = [
+      "Dashboard",
+      "Subjects",
+      "Chapters",
+    ];
+
+    if (!userId && !publicViews.includes(label)) {
+      onRequireAuth();
+      setSidebarOpen(false);
+      return;
+    }
+
     setView(label);
     window.localStorage.setItem("ca-progress-view", label);
 
@@ -1119,11 +1176,7 @@ function TrackerDashboard({
 
         <button
           className="profile-card"
-          onClick={() =>
-            nav(
-              "Settings"
-            )
-          }
+          onClick={() => nav("Settings")}
         >
           <span className="avatar">
             {initial}
@@ -1201,15 +1254,24 @@ function TrackerDashboard({
               />
             </button>
 
-            <button
-              className="icon-button logout-button"
-              onClick={onLogout}
-              title="Logout"
-            >
-              <LogOut
-                size={18}
-              />
-            </button>
+            {userId ? (
+              <button
+                className="icon-button logout-button"
+                onClick={onLogout}
+                title="Logout"
+              >
+                <LogOut size={18} />
+              </button>
+            ) : (
+              <button
+                className="guest-login-button"
+                onClick={onRequireAuth}
+                title="Sign in to track progress"
+              >
+                <LogIn size={17} />
+                <span>Sign in</span>
+              </button>
+            )}
 
             <button className="avatar large">
               {initial}
@@ -1247,6 +1309,11 @@ function TrackerDashboard({
               )
             }
             onQuickStudy={() => {
+              if (!userId) {
+                onRequireAuth();
+                return;
+              }
+
               setStudyHours(
                 (hours) => [
                   ...hours.slice(
@@ -3071,6 +3138,31 @@ function AuthStyles() {
         font-weight: 700;
         margin-left: 6px;
         cursor: pointer;
+      }
+
+      .auth-guest {
+        width: 100%;
+        height: 46px;
+        margin-top: 18px;
+        border: 1px solid #d9e1ef;
+        border-radius: 11px;
+        background: #f7f9fd;
+        color: #245ec2;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .auth-guest:hover {
+        background: #eef3fb;
+      }
+
+      .auth-guest-note {
+        margin: 10px 10px 0;
+        color: #8891a1;
+        font-size: 11px;
+        line-height: 1.5;
+        text-align: center;
       }
 
       .auth-error,
