@@ -865,27 +865,41 @@ function TrackerDashboard({
   const [saveStatus, setSaveStatus] =
     useState<"idle" | "saving" | "saved" | "error">("idle");
 
+  const [saveError, setSaveError] =
+    useState("");
+
   const saveProgress = async () => {
     if (!supabase || !userId) {
+      setSaveError("You are not logged in.");
       setSaveStatus("error");
       return;
     }
 
+    setSaveError("");
     setSaveStatus("saving");
+
+    const payload = {
+      progress,
+      activities,
+      studyHours,
+    };
 
     const { error } = await supabase
       .from("user_progress")
       .upsert(
         {
           user_id: userId,
-          progress: { progress, activities, studyHours },
+          progress: payload,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "user_id" }
+        {
+          onConflict: "user_id",
+        }
       );
 
     if (error) {
-      console.error("Unable to save progress:", error.message);
+      console.error("Unable to save progress:", error);
+      setSaveError(error.message);
       setSaveStatus("error");
       return;
     }
@@ -896,7 +910,6 @@ function TrackerDashboard({
       setSaveStatus("idle");
     }, 2000);
   };
-
 
   useEffect(() => {
     window.localStorage.setItem("ca-progress-view", view);
@@ -1049,9 +1062,7 @@ function TrackerDashboard({
           )
       );
 
-      flash(
-        stageCopy[stage]
-      );
+
     }
   };
 
@@ -1191,20 +1202,6 @@ function TrackerDashboard({
                 : "Track every step of your CA Intermediate preparation."}
             </p>
           </div>
-
-          <button
-            className={`save-progress-button ${saveStatus}`}
-            onClick={saveProgress}
-            disabled={saveStatus === "saving"}
-          >
-            {saveStatus === "saving"
-              ? "Saving..."
-              : saveStatus === "saved"
-                ? "Saved ✓"
-                : saveStatus === "error"
-                  ? "Save failed"
-                  : "Save Progress"}
-          </button>
 
           <div className="top-actions">
             <button className="icon-button">
@@ -1351,6 +1348,9 @@ function TrackerDashboard({
             subjectStats={
               subjectStats
             }
+            onSaveProgress={saveProgress}
+            saveStatus={saveStatus}
+            saveError={saveError}
           />
         )}
 
@@ -1922,6 +1922,9 @@ function ChaptersView({
   progress,
   toggle,
   subjectStats,
+  onSaveProgress,
+  saveStatus,
+  saveError,
 }: {
   subjects: SubjectName[];
   activeSubject: SubjectName;
@@ -1945,6 +1948,9 @@ function ChaptersView({
     done: number;
     percent: number;
   };
+  onSaveProgress: () => void;
+  saveStatus: "idle" | "saving" | "saved" | "error";
+  saveError: string;
 }) {
   const rows =
     syllabus[
@@ -2138,6 +2144,31 @@ function ChaptersView({
             );
           }
         )}
+      </div>
+
+      <div className="chapter-save-bar">
+        <div>
+          <strong>Changes are not saved automatically</strong>
+          <span>Tick or untick anything, then save when you're ready.</span>
+          {saveStatus === "error" && saveError && (
+            <small className="save-error-message">{saveError}</small>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className={`chapter-save-button ${saveStatus}`}
+          onClick={onSaveProgress}
+          disabled={saveStatus === "saving"}
+        >
+          {saveStatus === "saving"
+            ? "Saving..."
+            : saveStatus === "saved"
+              ? "Saved ✓"
+              : saveStatus === "error"
+                ? "Try Again"
+                : "Save Progress"}
+        </button>
       </div>
 
       <div className="status-legend">
@@ -3087,33 +3118,67 @@ function AuthStyles() {
         color: #8a6316;
       }
 
-      .save-progress-button {
-        border: 1px solid #dfe5ee;
-        background: #111827;
+      .chapter-save-bar {
+        margin-top: 22px;
+        padding: 16px 18px;
+        border: 1px solid #e5e9f0;
+        border-radius: 14px;
+        background: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .chapter-save-bar > div {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .chapter-save-bar strong {
+        font-size: 14px;
+      }
+
+      .chapter-save-bar span {
+        font-size: 12px;
+        color: #778397;
+      }
+
+      .save-error-message {
+        color: #c2413b;
+        font-size: 11px;
+        margin-top: 3px;
+      }
+
+      .chapter-save-button {
+        border: 0;
+        background: #3568b8;
         color: #fff;
-        padding: 10px 15px;
+        padding: 11px 18px;
         border-radius: 9px;
         font-size: 13px;
         font-weight: 700;
         cursor: pointer;
         white-space: nowrap;
+        min-width: 130px;
       }
 
-      .save-progress-button:hover {
-        opacity: 0.92;
+      .chapter-save-button:hover {
+        filter: brightness(0.96);
       }
 
-      .save-progress-button:disabled {
+      .chapter-save-button:disabled {
         cursor: wait;
         opacity: 0.7;
       }
 
-      .save-progress-button.saved {
-        background: #18703b;
+      .chapter-save-button.saved {
+        background: #2f8a63;
       }
 
-      .save-progress-button.error {
-        background: #b3261e;
+      .chapter-save-button.error {
+        background: #c2413b;
       }
 
       .logout-button {
