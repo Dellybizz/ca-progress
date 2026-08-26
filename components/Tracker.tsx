@@ -812,8 +812,6 @@ function TrackerDashboard({
   const [dataReady, setDataReady] =
     useState(false);
 
-  const saveTimerRef =
-    useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -866,7 +864,7 @@ function TrackerDashboard({
 
 
   useEffect(() => {
-    if (!supabase || !userId || !dataReadyRef.current) return;
+    if (!supabase || !userId || !dataReady) return;
 
     const saveTimer = window.setTimeout(async () => {
       const payload = {
@@ -891,7 +889,7 @@ function TrackerDashboard({
       if (error) {
         console.error(
           "Unable to automatically save progress:",
-          error
+          error.message
         );
       }
     }, 700);
@@ -904,6 +902,7 @@ function TrackerDashboard({
     progress,
     activities,
     studyHours,
+    dataReady,
   ]);
 
   useEffect(() => {
