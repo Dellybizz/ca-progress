@@ -2031,26 +2031,43 @@ function ChaptersView({
           {rows.length} Chapters
         </div>
 
-        <label>
-          <Search
-            size={16}
-          />
+        <div className="chapter-toolbar-actions">
+          <label>
+            <Search
+              size={16}
+            />
 
-          <input
-            value={
-              search
-            }
-            onChange={(
-              event
-            ) =>
-              setSearch(
-                event.target
-                  .value
-              )
-            }
-            placeholder="Search chapters"
-          />
-        </label>
+            <input
+              value={
+                search
+              }
+              onChange={(
+                event
+              ) =>
+                setSearch(
+                  event.target
+                    .value
+                )
+              }
+              placeholder="Search chapters"
+            />
+          </label>
+
+          <button
+            type="button"
+            className={`chapter-save-button ${saveStatus}`}
+            onClick={onSaveProgress}
+            disabled={saveStatus === "saving"}
+          >
+            {saveStatus === "saving"
+              ? "Saving..."
+              : saveStatus === "saved"
+                ? "Saved ✓"
+                : saveStatus === "error"
+                  ? "Try Again"
+                  : "Save Progress"}
+          </button>
+        </div>
       </div>
 
       <div className="chapter-table">
@@ -2144,31 +2161,6 @@ function ChaptersView({
             );
           }
         )}
-      </div>
-
-      <div className="chapter-save-bar">
-        <div>
-          <strong>Changes are not saved automatically</strong>
-          <span>Tick or untick anything, then save when you're ready.</span>
-          {saveStatus === "error" && saveError && (
-            <small className="save-error-message">{saveError}</small>
-          )}
-        </div>
-
-        <button
-          type="button"
-          className={`chapter-save-button ${saveStatus}`}
-          onClick={onSaveProgress}
-          disabled={saveStatus === "saving"}
-        >
-          {saveStatus === "saving"
-            ? "Saving..."
-            : saveStatus === "saved"
-              ? "Saved ✓"
-              : saveStatus === "error"
-                ? "Try Again"
-                : "Save Progress"}
-        </button>
       </div>
 
       <div className="status-legend">
@@ -3118,59 +3110,37 @@ function AuthStyles() {
         color: #8a6316;
       }
 
-      .chapter-save-bar {
-        margin-top: 22px;
-        padding: 16px 18px;
-        border: 1px solid #e5e9f0;
-        border-radius: 14px;
-        background: #fff;
+      .chapter-toolbar-actions {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 18px;
+        gap: 10px;
       }
 
-      .chapter-save-bar > div {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-
-      .chapter-save-bar strong {
-        font-size: 14px;
-      }
-
-      .chapter-save-bar span {
-        font-size: 12px;
-        color: #778397;
-      }
-
-      .save-error-message {
-        color: #c2413b;
-        font-size: 11px;
-        margin-top: 3px;
+      .chapter-toolbar-actions label {
+        min-width: 272px;
       }
 
       .chapter-save-button {
         border: 0;
         background: #3568b8;
         color: #fff;
-        padding: 11px 18px;
+        height: 40px;
+        padding: 0 18px;
         border-radius: 9px;
         font-size: 13px;
         font-weight: 700;
         cursor: pointer;
         white-space: nowrap;
-        min-width: 130px;
+        box-shadow: 0 4px 12px rgba(53, 104, 184, 0.18);
       }
 
       .chapter-save-button:hover {
-        filter: brightness(0.96);
+        background: #2f5fa9;
       }
 
       .chapter-save-button:disabled {
         cursor: wait;
-        opacity: 0.7;
+        opacity: 0.75;
       }
 
       .chapter-save-button.saved {
@@ -3179,6 +3149,23 @@ function AuthStyles() {
 
       .chapter-save-button.error {
         background: #c2413b;
+      }
+
+      @media (max-width: 720px) {
+        .chapter-toolbar-actions {
+          width: 100%;
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .chapter-toolbar-actions label {
+          min-width: 0;
+          width: 100%;
+        }
+
+        .chapter-save-button {
+          width: 100%;
+        }
       }
 
       .logout-button {
@@ -3258,4 +3245,3 @@ function AuthStyles() {
     `}</style>
   );
 }
-import {
