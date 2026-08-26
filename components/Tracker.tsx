@@ -862,54 +862,49 @@ function TrackerDashboard({
     };
   }, [userId]);
 
-  const [saveStatus, setSaveStatus] =
-    useState<"idle" | "saving" | "saved" | "error">("idle");
 
-  const [saveError, setSaveError] =
-    useState("");
 
-  const saveProgress = async () => {
-    if (!supabase || !userId) {
-      setSaveError("You are not logged in.");
-      setSaveStatus("error");
-      return;
-    }
 
-    setSaveError("");
-    setSaveStatus("saving");
+  useEffect(() => {
+    if (!supabase || !userId || !dataReadyRef.current) return;
 
-    const payload = {
-      progress,
-      activities,
-      studyHours,
+    const saveTimer = window.setTimeout(async () => {
+      const payload = {
+        progress,
+        activities,
+        studyHours,
+      };
+
+      const { error } = await supabase
+        .from("user_progress")
+        .upsert(
+          {
+            user_id: userId,
+            progress: payload,
+            updated_at: new Date().toISOString(),
+          },
+          {
+            onConflict: "user_id",
+          }
+        );
+
+      if (error) {
+        console.error(
+          "Unable to automatically save progress:",
+          error
+        );
+      }
+    }, 700);
+
+    return () => {
+      window.clearTimeout(saveTimer);
     };
-
-    const { error } = await supabase
-      .from("user_progress")
-      .upsert(
-        {
-          user_id: userId,
-          progress: payload,
-          updated_at: new Date().toISOString(),
-        },
-        {
-          onConflict: "user_id",
-        }
-      );
-
-    if (error) {
-      console.error("Unable to save progress:", error);
-      setSaveError(error.message);
-      setSaveStatus("error");
-      return;
-    }
-
-    setSaveStatus("saved");
-
-    window.setTimeout(() => {
-      setSaveStatus("idle");
-    }, 2000);
-  };
+  }, [
+    userId,
+    progress,
+    activities,
+    studyHours,
+  ]);
 
   useEffect(() => {
     window.localStorage.setItem("ca-progress-view", view);
@@ -1348,9 +1343,6 @@ function TrackerDashboard({
             subjectStats={
               subjectStats
             }
-            onSaveProgress={saveProgress}
-            saveStatus={saveStatus}
-            saveError={saveError}
           />
         )}
 
@@ -1422,16 +1414,6 @@ function TrackerDashboard({
           />
         )}
       </section>
-
-      {toast && (
-        <div className="toast">
-          <Check
-            size={16}
-          />
-
-          {toast}
-        </div>
-      )}
     </main>
   );
 }
@@ -1922,9 +1904,6 @@ function ChaptersView({
   progress,
   toggle,
   subjectStats,
-  onSaveProgress,
-  saveStatus,
-  saveError,
 }: {
   subjects: SubjectName[];
   activeSubject: SubjectName;
@@ -1948,9 +1927,6 @@ function ChaptersView({
     done: number;
     percent: number;
   };
-  onSaveProgress: () => void;
-  saveStatus: "idle" | "saving" | "saved" | "error";
-  saveError: string;
 }) {
   const rows =
     syllabus[
@@ -2066,51 +2042,6 @@ function ChaptersView({
               placeholder="Search chapters"
             />
           </label>
-
-          <button
-            type="button"
-            onClick={onSaveProgress}
-            disabled={saveStatus === "saving"}
-            style={{
-              appearance: "none",
-              WebkitAppearance: "none",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              height: "40px",
-              minWidth: "136px",
-              padding: "0 18px",
-              border: "none",
-              borderRadius: "9px",
-              background:
-                saveStatus === "saved"
-                  ? "#2f8a63"
-                  : saveStatus === "error"
-                    ? "#c2413b"
-                    : "#3568b8",
-              color: "#ffffff",
-              fontSize: "13px",
-              fontWeight: 700,
-              lineHeight: 1,
-              cursor:
-                saveStatus === "saving"
-                  ? "wait"
-                  : "pointer",
-              opacity:
-                saveStatus === "saving"
-                  ? 0.75
-                  : 1,
-              whiteSpace: "nowrap",
-              boxShadow:
-                "0 4px 12px rgba(53, 104, 184, 0.18)",
-            }}
-          >
-            {saveStatus === "saving"
-              ? "Saving..."
-              : saveStatus === "saved"
-                ? "Saved ✓"
-                : "Save Progress"}
-          </button>
         </div>
       </div>
 
@@ -3161,77 +3092,12 @@ function AuthStyles() {
         gap: 16px;
       }
 
-      .chapter-toolbar-actions {
+      .chapter-toolbar {
         display: flex !important;
-        flex-direction: row !important;
         align-items: center !important;
-        gap: 10px;
+        justify-content: space-between !important;
+        gap: 12px !important;
         flex-wrap: nowrap !important;
-      }
-
-      .chapter-toolbar-actions label {
-        min-width: 272px;
-        margin: 0;
-      }
-
-      button.chapter-save-button {
-        appearance: none;
-        -webkit-appearance: none;
-        display: inline-flex !important;
-        align-items: center;
-        justify-content: center;
-        border: none !important;
-        background: #3568b8 !important;
-        color: #ffffff !important;
-        height: 40px;
-        min-width: 126px;
-        padding: 0 18px;
-        border-radius: 9px;
-        font-size: 13px;
-        font-weight: 700;
-        line-height: 1;
-        cursor: pointer;
-        white-space: nowrap;
-        box-shadow: 0 4px 12px rgba(53, 104, 184, 0.18);
-      }
-
-      button.chapter-save-button:hover {
-        background: #2f5fa9 !important;
-      }
-
-      button.chapter-save-button:disabled {
-        cursor: wait;
-        opacity: 0.75;
-      }
-
-      button.chapter-save-button.saved {
-        background: #2f8a63 !important;
-      }
-
-      button.chapter-save-button.error {
-        background: #c2413b !important;
-      }
-
-      @media (max-width: 720px) {
-        .chapter-toolbar {
-          align-items: center;
-        }
-
-        .chapter-toolbar-actions {
-          width: auto !important;
-          flex-direction: row !important;
-          align-items: center !important;
-        }
-
-        .chapter-toolbar-actions label {
-          width: auto !important;
-          min-width: 190px;
-        }
-
-        button.chapter-save-button {
-          width: auto !important;
-          min-width: 126px;
-        }
       }
 
       .logout-button {
