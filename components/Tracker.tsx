@@ -124,7 +124,7 @@ export default function Tracker() {
           onQuickTest={() => { setView("Chapters"); flash("Pick a chapter and mark its test complete"); }}
           onViewAll={() => setView("Activity")}
         />}
-        {view === "Subjects" && <SubjectsView subjects={subjects} subjectStats={subjectStats} onOpen={subject => { setActiveSubject(subject); setView("Chapters"); }}/>} 
+        {view === "Subjects" && (   <SubjectsView     subjects={subjects}     subjectStats={subjectStats}     onOpen={(subject: string) => {       setActiveSubject(subject);       setView("Chapters");     }}   /> )} 
         {view === "Chapters" && <ChaptersView subjects={subjects} activeSubject={activeSubject} setActiveSubject={setActiveSubject} search={search} setSearch={setSearch} progress={progress} toggle={toggle} subjectStats={subjectStats}/>} 
         {view === "Analytics" && <AnalyticsView overall={overall} counts={counts} total={allRows.length} subjects={subjects} subjectStats={subjectStats} studyHours={studyHours}/>} 
         {view === "Activity" && <ActivityView activities={activities}/>} 
