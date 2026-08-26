@@ -8,7 +8,7 @@ import {
   CalendarDays,
   Check,
   ChevronRight,
-  ClipboardCheck,
+  ClipboardCheck
   Clock3,
   FileText,
   Flame,
@@ -775,7 +775,20 @@ function ChaptersView({
   progress,
   toggle,
   subjectStats,
-}: any) {
+}: {
+  subjects: SubjectName[];
+  activeSubject: SubjectName;
+  setActiveSubject: React.Dispatch<React.SetStateAction<SubjectName>>;
+  search: string;
+  setSearch: React.Dispatch<React.SetStateAction<string>>;
+  progress: Progress;
+  toggle: (subject: SubjectName, chapter: string, stage: Stage) => void;
+  subjectStats: (subject: SubjectName) => {
+    total: number;
+    done: number;
+    percent: number;
+  };
+}) {
   const rows = syllabus[activeSubject].filter(
     (chapter) =>
       chapter
