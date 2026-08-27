@@ -80,11 +80,62 @@ const supabaseUrl =
 const supabaseAnonKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+const rememberDeviceKey =
+  "ca-progress-remember-device";
+
+const authStorage = {
+  getItem(key: string) {
+    if (typeof window === "undefined") return null;
+
+    const remember =
+      window.localStorage.getItem(
+        rememberDeviceKey
+      ) !== "false";
+
+    return remember
+      ? window.localStorage.getItem(key) ||
+          window.sessionStorage.getItem(key)
+      : window.sessionStorage.getItem(key);
+  },
+
+  setItem(key: string, value: string) {
+    if (typeof window === "undefined") return;
+
+    const remember =
+      window.localStorage.getItem(
+        rememberDeviceKey
+      ) !== "false";
+
+    if (remember) {
+      window.localStorage.setItem(key, value);
+      window.sessionStorage.removeItem(key);
+    } else {
+      window.sessionStorage.setItem(key, value);
+      window.localStorage.removeItem(key);
+    }
+  },
+
+  removeItem(key: string) {
+    if (typeof window === "undefined") return;
+
+    window.localStorage.removeItem(key);
+    window.sessionStorage.removeItem(key);
+  },
+};
+
 const supabase =
   supabaseUrl && supabaseAnonKey
     ? createClient(
         supabaseUrl,
-        supabaseAnonKey
+        supabaseAnonKey,
+        {
+          auth: {
+            storage: authStorage,
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+          },
+        }
       )
     : null;
 
@@ -173,7 +224,8 @@ type ProgressContextValue = {
 
   signIn: (
     email: string,
-    password: string
+    password: string,
+    rememberOnDevice: boolean
   ) => Promise<string | null>;
 
   signUp: (
@@ -184,7 +236,9 @@ type ProgressContextValue = {
     needsConfirmation: boolean;
   }>;
 
-  signInWithGoogle: () => Promise<string | null>;
+  signInWithGoogle: (
+    rememberOnDevice: boolean
+  ) => Promise<string | null>;
 
   signOut: () => Promise<void>;
 
@@ -399,10 +453,18 @@ export function ProgressProvider({
 
   const signIn = async (
     email: string,
-    password: string
+    password: string,
+    rememberOnDevice: boolean
   ) => {
     if (!supabase) {
       return "Supabase is not configured. Check your Vercel environment variables.";
+    }
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        rememberDeviceKey,
+        String(rememberOnDevice)
+      );
     }
 
     const { error } =
@@ -448,9 +510,18 @@ export function ProgressProvider({
   ========================================================= */
 
   const signInWithGoogle =
-    async (): Promise<string | null> => {
+    async (
+      rememberOnDevice: boolean
+    ): Promise<string | null> => {
       if (!supabase) {
         return "Supabase is not configured. Check your Vercel environment variables.";
+      }
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          rememberDeviceKey,
+          String(rememberOnDevice)
+        );
       }
 
       const redirectTo =
