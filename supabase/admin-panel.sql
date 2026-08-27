@@ -102,5 +102,12 @@ create policy "moderators delete community messages"
 on public.community_messages for delete
 using (public.is_admin(array['owner','admin','moderator']));
 
+grant usage on schema public to anon, authenticated;
+grant select on public.subscription_plans, public.app_sections to anon, authenticated;
+grant select, insert, update, delete on public.subscription_plans, public.admin_users, public.user_subscriptions, public.app_sections to authenticated;
+grant select, insert on public.admin_audit_logs to authenticated;
+grant usage, select on sequence public.admin_audit_logs_id_seq to authenticated;
+grant select, insert, delete on public.community_messages to authenticated;
+
 -- BOOTSTRAP OWNER (run separately after replacing the UUID):
 -- insert into public.admin_users(user_id,role) values ('REPLACE_WITH_YOUR_SUPABASE_USER_UUID','owner');
