@@ -22,6 +22,12 @@ Finally run:
 
 This creates the detailed page-element registry used by the Admin Page Builder.
 
+Then run:
+
+`supabase/announcements-subscription-controls.sql`
+
+This makes subscription editing Owner-only and adds timed pinned announcements.
+
 ## 2. Add Vercel server variables
 
 In Vercel → Project → Settings → Environment Variables add:
