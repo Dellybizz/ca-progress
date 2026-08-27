@@ -42,8 +42,9 @@ import {
 import CommunityChat from "@/components/CommunityChat";
 
 import {
+  CourseGroup,
   CourseLevel,
-  courseSyllabi,
+  getSubjectsForSelection,
   syllabus,
   SubjectName,
 } from "@/lib/syllabus";
@@ -1041,12 +1042,51 @@ function TrackerDashboard({
       : "Intermediate";
   });
 
+  const [
+    courseGroup,
+    setCourseGroup,
+  ] = useState<CourseGroup>(() => {
+    if (typeof window === "undefined") {
+      return "Both";
+    }
+
+    const saved = window.localStorage.getItem(
+      "ca-progress-course-group"
+    ) as CourseGroup | null;
+
+    return saved &&
+      ["Group 1", "Group 2", "Both"].includes(saved)
+      ? saved
+      : "Both";
+  });
+
+  const [
+    draftLevel,
+    setDraftLevel,
+  ] = useState<CourseLevel>(courseLevel);
+
+  const [
+    draftGroup,
+    setDraftGroup,
+  ] = useState<CourseGroup>(courseGroup);
+
+  const [
+    showCourseSelector,
+    setShowCourseSelector,
+  ] = useState(() =>
+    typeof window !== "undefined" &&
+    !window.localStorage.getItem(
+      "ca-progress-course-group"
+    )
+  );
+
   const subjects = useMemo(
     () =>
-      Object.keys(
-        courseSyllabi[courseLevel]
-      ) as SubjectName[],
-    [courseLevel]
+      getSubjectsForSelection(
+        courseLevel,
+        courseGroup
+      ),
+    [courseGroup, courseLevel]
   );
 
   const allRows = useMemo(
@@ -1175,20 +1215,35 @@ function TrackerDashboard({
     setSearch,
   ] = useState("");
 
-  const changeCourseLevel = (
-    nextLevel: CourseLevel
+  const applyCourseSelection = (
+    nextLevel: CourseLevel,
+    nextGroup: CourseGroup
   ) => {
-    const nextSubjects = Object.keys(
-      courseSyllabi[nextLevel]
-    ) as SubjectName[];
+    const resolvedGroup =
+      nextLevel === "Foundation"
+        ? "Both"
+        : nextGroup;
+
+    const nextSubjects =
+      getSubjectsForSelection(
+        nextLevel,
+        resolvedGroup
+      );
 
     setCourseLevel(nextLevel);
+    setCourseGroup(resolvedGroup);
     setActiveSubject(nextSubjects[0]);
     setSearch("");
+    setShowCourseSelector(false);
 
     window.localStorage.setItem(
       "ca-progress-course-level",
       nextLevel
+    );
+
+    window.localStorage.setItem(
+      "ca-progress-course-group",
+      resolvedGroup
     );
 
     window.localStorage.setItem(
@@ -1444,6 +1499,105 @@ function TrackerDashboard({
 
   return (
     <main className="app-shell">
+      {showCourseSelector && (
+        <div className="course-modal-backdrop">
+          <section
+            className="course-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="course-modal-title"
+          >
+            <div className="course-modal-head">
+              <span className="course-modal-logo">CA</span>
+
+              <div>
+                <h2 id="course-modal-title">
+                  Choose your course
+                </h2>
+
+                <p>
+                  Your dashboard will show only the papers relevant to this selection.
+                </p>
+              </div>
+            </div>
+
+            <div className="course-level-grid">
+              {(["Foundation", "Intermediate", "Final"] as CourseLevel[]).map(
+                (level) => (
+                  <button
+                    type="button"
+                    key={level}
+                    className={
+                      draftLevel === level
+                        ? "course-level-card active"
+                        : "course-level-card"
+                    }
+                    onClick={() => {
+                      setDraftLevel(level);
+                      if (level === "Foundation") {
+                        setDraftGroup("Both");
+                      }
+                    }}
+                  >
+                    <strong>CA {level}</strong>
+                    <span>
+                      {level === "Foundation"
+                        ? "4 papers"
+                        : "6 papers · 2 groups"}
+                    </span>
+                  </button>
+                )
+              )}
+            </div>
+
+            {draftLevel !== "Foundation" && (
+              <div className="course-group-section">
+                <label>Select papers</label>
+
+                <div className="course-group-grid">
+                  {(["Group 1", "Group 2", "Both"] as CourseGroup[]).map(
+                    (group) => (
+                      <button
+                        type="button"
+                        key={group}
+                        className={
+                          draftGroup === group
+                            ? "active"
+                            : ""
+                        }
+                        onClick={() => setDraftGroup(group)}
+                      >
+                        <strong>{group}</strong>
+                        <span>
+                          {group === "Both"
+                            ? "All 6 papers"
+                            : "3 papers"}
+                        </span>
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="course-modal-actions">
+              <button
+                type="button"
+                className="course-apply"
+                onClick={() =>
+                  applyCourseSelection(
+                    draftLevel,
+                    draftGroup
+                  )
+                }
+              >
+                Open my dashboard
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       <aside
         className={`sidebar ${
           sidebarOpen
@@ -1461,22 +1615,24 @@ function TrackerDashboard({
           </small>
         </div>
 
-        <label className="course-switcher">
-          <span>Course level</span>
-
-          <select
-            value={courseLevel}
-            onChange={(event) =>
-              changeCourseLevel(
-                event.target.value as CourseLevel
-              )
-            }
-          >
-            <option value="Foundation">CA Foundation</option>
-            <option value="Intermediate">CA Intermediate</option>
-            <option value="Final">CA Final</option>
-          </select>
-        </label>
+        <button
+          type="button"
+          className="course-switcher"
+          onClick={() => {
+            setDraftLevel(courseLevel);
+            setDraftGroup(courseGroup);
+            setShowCourseSelector(true);
+          }}
+        >
+          <span>Current course</span>
+          <strong>CA {courseLevel}</strong>
+          <small>
+            {courseLevel === "Foundation"
+              ? "All papers"
+              : courseGroup}
+            {" · Change"}
+          </small>
+        </button>
 
         <nav>
           {menu.map(
@@ -1529,6 +1685,9 @@ function TrackerDashboard({
 
             <small>
               CA {courseLevel}
+              {courseLevel !== "Foundation"
+                ? ` · ${courseGroup}`
+                : ""}
             </small>
           </span>
 
@@ -1652,6 +1811,7 @@ function TrackerDashboard({
           "Dashboard" && (
           <Dashboard
             courseLevel={courseLevel}
+            courseGroup={courseGroup}
             subjects={
               subjects
             }
@@ -1668,7 +1828,12 @@ function TrackerDashboard({
               subjectStats
             }
             activities={
-              activities
+              activities.filter(
+                (item) =>
+                  subjects.includes(
+                    item.subject as SubjectName
+                  )
+              )
             }
             studyHours={
               userId
@@ -1799,7 +1964,12 @@ function TrackerDashboard({
           "Activity" && (
           <ActivityView
             activities={
-              activities
+              activities.filter(
+                (item) =>
+                  subjects.includes(
+                    item.subject as SubjectName
+                  )
+              )
             }
           />
         )}
@@ -1807,7 +1977,10 @@ function TrackerDashboard({
         {view === "Study Sessions" && (
           <StudySessionsView
             subjects={subjects}
-            items={studySessions}
+            items={studySessions.filter(
+              (item) =>
+                subjects.includes(item.subject)
+            )}
             setItems={setStudySessions}
             onAddMinutes={(minutes) =>
               setStudyHours((hours) => [
@@ -1851,7 +2024,10 @@ function TrackerDashboard({
         {view === "Test Series" && (
           <TestsView
             subjects={subjects}
-            items={tests}
+            items={tests.filter(
+              (item) =>
+                subjects.includes(item.subject)
+            )}
             setItems={setTests}
             onSave={saveProgress}
             saveStatus={saveStatus}
@@ -1898,6 +2074,7 @@ function TrackerDashboard({
 
 function Dashboard({
   courseLevel,
+  courseGroup,
   subjects,
   overall,
   counts,
@@ -1925,7 +2102,10 @@ function Dashboard({
 
           <div>
             <small>
-              CA {String(courseLevel).toUpperCase()} EXAM
+              CA {String(courseLevel).toUpperCase()}
+              {courseLevel !== "Foundation"
+                ? ` · ${String(courseGroup).toUpperCase()}`
+                : ""}
             </small>
 
             <div className="countdown">
@@ -2985,6 +3165,12 @@ function StudySessionsView({
     setMinutes,
   ] = useState("30");
 
+  useEffect(() => {
+    if (!subjects.includes(subject)) {
+      setSubject(subjects[0]);
+    }
+  }, [subject, subjects]);
+
   const add = (
     event: FormEvent
   ) => {
@@ -3390,6 +3576,12 @@ function TestsView({
     maxScore,
     setMaxScore,
   ] = useState("100");
+
+  useEffect(() => {
+    if (!subjects.includes(subject)) {
+      setSubject(subjects[0]);
+    }
+  }, [subject, subjects]);
 
   const add = (
     event: FormEvent
