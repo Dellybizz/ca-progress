@@ -16,6 +16,12 @@ Then run the complete contents of:
 This adds the protected member-directory fallback, per-channel Moderator
 permissions, timed chat blocks and student violation notices.
 
+Finally run:
+
+`supabase/page-elements-editor.sql`
+
+This creates the detailed page-element registry used by the Admin Page Builder.
+
 ## 2. Add Vercel server variables
 
 In Vercel → Project → Settings → Environment Variables add:
