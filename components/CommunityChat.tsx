@@ -37,7 +37,7 @@ const mainChannels = [
 ] as const;
 
 const studyRooms = [
-  ["audit", "Audit & Assurance", "Study Audit & Assurance together."],
+  ["audit", "Audit", "Study Audit together."],
   ["taxation", "Taxation", "Discuss taxation concepts and questions."],
   ["accounting", "Accounting", "Practice accounting concepts together."],
   ["law", "Law", "Discuss important law concepts and cases."],
