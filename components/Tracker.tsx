@@ -7,7 +7,6 @@ import {
   SetStateAction,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 
@@ -39,61 +38,25 @@ import {
 } from "lucide-react";
 
 import {
-  createClient,
-  Session,
-} from "@supabase/supabase-js";
-
-import {
   syllabus,
   SubjectName,
 } from "@/lib/syllabus";
-
-/* =========================================================
-   SUPABASE
-========================================================= */
-
-const supabaseUrl =
-  process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-const supabaseAnonKey =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-const supabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient(
-        supabaseUrl,
-        supabaseAnonKey
-      )
-    : null;
+import {
+  ActivityItem,
+  CalendarItem,
+  GoalItem,
+  NoteItem,
+  Progress,
+  SaveStatus,
+  Stage,
+  StudySessionItem,
+  TestItem,
+  useProgress,
+} from "@/context/ProgressContext";
 
 /* =========================================================
    TYPES
 ========================================================= */
-
-type Stage =
-  | "done"
-  | "revision1"
-  | "revision2"
-  | "testDone";
-
-type Progress = Record<
-  string,
-  Partial<Record<Stage, boolean>>
->;
-
-type ActivityItem = {
-  id: string;
-  chapter: string;
-  subject: string;
-  stage: Stage;
-  time: string;
-};
-
-type StudySessionItem = { id: string; subject: SubjectName; minutes: number; date: string };
-type GoalItem = { id: string; title: string; dueDate: string; completed: boolean };
-type TestItem = { id: string; subject: SubjectName; score: number; maxScore: number; date: string };
-type CalendarItem = { id: string; title: string; date: string };
-type NoteItem = { id: string; title: string; body: string; updatedAt: string };
 
 type View =
   | "Dashboard"
@@ -271,16 +234,6 @@ const keyFor = (
   return `${subject}::${chapter}`;
 };
 
-const defaultStudyHours = [
-  1.2,
-  2.1,
-  1.6,
-  2.8,
-  2.4,
-  3.5,
-  4.5,
-];
-
 /* =========================================================
    MAIN COMPONENT
 ========================================================= */
@@ -290,11 +243,17 @@ export default function Tracker({
 }: {
   initialView?: View;
 }) {
-  const [session, setSession] =
-    useState<Session | null>(null);
-
-  const [authLoading, setAuthLoading] =
-    useState(true);
+  const {
+    session,
+    authLoading,
+    guestMode,
+    configured,
+    signIn,
+    signUp,
+    signOut,
+    continueAsGuest,
+    requireAuth,
+  } = useProgress();
 
   const [authMode, setAuthMode] =
     useState<AuthMode>("login");
@@ -314,64 +273,6 @@ export default function Tracker({
   const [submitting, setSubmitting] =
     useState(false);
 
-  const [guestMode, setGuestMode] =
-    useState(false);
-
-  /* =======================================================
-     CHECK LOGIN SESSION
-  ======================================================= */
-
-  useEffect(() => {
-    if (!supabase) {
-      setAuthLoading(false);
-      return;
-    }
-
-    let mounted = true;
-
-    const loadSession = async () => {
-      const {
-        data,
-      } =
-        await supabase.auth.getSession();
-
-      if (mounted) {
-        setSession(
-          data.session
-        );
-
-        setAuthLoading(false);
-      }
-    };
-
-    loadSession();
-
-    const {
-      data: listener,
-    } =
-      supabase.auth.onAuthStateChange(
-        (_event, newSession) => {
-          if (mounted) {
-            setSession(
-              newSession
-            );
-
-            if (newSession) {
-              setGuestMode(false);
-            }
-
-            setAuthLoading(false);
-          }
-        }
-      );
-
-    return () => {
-      mounted = false;
-
-      listener.subscription.unsubscribe();
-    };
-  }, []);
-
   /* =======================================================
      LOGIN / SIGNUP
   ======================================================= */
@@ -381,50 +282,19 @@ export default function Tracker({
   ) => {
     event.preventDefault();
 
-    if (!supabase) {
-      setAuthError(
-        "Supabase is not configured. Check your Vercel environment variables."
-      );
-
-      return;
-    }
-
     setAuthError("");
     setAuthMessage("");
     setSubmitting(true);
 
     try {
       if (authMode === "login") {
-        const {
-          error,
-        } =
-          await supabase.auth.signInWithPassword({
-            email,
-            password,
-          });
-
-        if (error) {
-          setAuthError(
-            error.message
-          );
-        }
+        const error = await signIn(email, password);
+        if (error) setAuthError(error);
       } else {
-        const {
-          data,
-          error,
-        } =
-          await supabase.auth.signUp({
-            email,
-            password,
-          });
-
-        if (error) {
-          setAuthError(
-            error.message
-          );
-        } else if (
-          !data.session
-        ) {
+        const result = await signUp(email, password);
+        if (result.error) {
+          setAuthError(result.error);
+        } else if (result.needsConfirmation) {
           setAuthMessage(
             "Account created. Please check your email to confirm your account."
           );
@@ -444,11 +314,7 @@ export default function Tracker({
   ======================================================= */
 
   const handleLogout = async () => {
-    if (!supabase) {
-      return;
-    }
-
-    await supabase.auth.signOut();
+    await signOut();
   };
 
   /* =======================================================
@@ -680,7 +546,7 @@ export default function Tracker({
                 onClick={() => {
                   setAuthError("");
                   setAuthMessage("");
-                  setGuestMode(true);
+                  continueAsGuest();
                 }}
               >
                 Continue without an account
@@ -691,7 +557,7 @@ export default function Tracker({
                 to track and save your progress.
               </p>
 
-              {!supabase && (
+              {!configured && (
                 <div className="auth-config-warning">
                   Supabase environment variables
                   are missing.
@@ -730,7 +596,7 @@ export default function Tracker({
         setAuthMessage(
           "Sign in or create an account to track and save your progress."
         );
-        setGuestMode(false);
+        requireAuth();
       }}
     />
   );
@@ -786,6 +652,26 @@ function TrackerDashboard({
   onRequireAuth: () => void;
 }) {
   const router = useRouter();
+  const {
+    progress,
+    setProgress,
+    activities,
+    setActivities,
+    studyHours,
+    setStudyHours,
+    studySessions,
+    setStudySessions,
+    goals,
+    setGoals,
+    tests,
+    setTests,
+    calendarItems,
+    setCalendarItems,
+    notes,
+    setNotes,
+    saveStatus,
+    saveProgress: saveStoredProgress,
+  } = useProgress();
 
   const subjects =
     Object.keys(
@@ -845,25 +731,8 @@ function TrackerDashboard({
       return saved && subjects.includes(saved) ? saved : subjects[0];
     });
 
-  const [progress, setProgress] =
-    useState<Progress>({});
-
-  const [studySessions, setStudySessions] = useState<StudySessionItem[]>([]);
-  const [goals, setGoals] = useState<GoalItem[]>([]);
-  const [tests, setTests] = useState<TestItem[]>([]);
-  const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
-  const [notes, setNotes] = useState<NoteItem[]>([]);
-
   const [search, setSearch] =
     useState("");
-
-  const [
-    activities,
-    setActivities,
-  ] =
-    useState<ActivityItem[]>(
-      []
-    );
 
   const [
     sidebarOpen,
@@ -873,14 +742,6 @@ function TrackerDashboard({
 
   const [toast, setToast] =
     useState("");
-
-  const [
-    studyHours,
-    setStudyHours,
-  ] =
-    useState<number[]>(
-      defaultStudyHours
-    );
 
   const firstName =
     email
@@ -898,112 +759,12 @@ function TrackerDashboard({
       .charAt(0)
       .toUpperCase() || "C";
 
-  /* =======================================================
-     SUPABASE USER DATA
-  ======================================================= */
-
-  const dataReadyRef =
-    useRef(false);
-
-  const [dataReady, setDataReady] =
-    useState(false);
-
-  const [saveStatus, setSaveStatus] =
-    useState<"idle" | "saving" | "saved" | "error">("idle");
-
-
-  useEffect(() => {
-    let cancelled = false;
-
-    dataReadyRef.current = false;
-    setDataReady(false);
-
-    if (!supabase || !userId) {
-      dataReadyRef.current = true;
-      setDataReady(true);
-      return;
-    }
-
-    const loadUserData = async () => {
-      const { data, error } =
-        await supabase
-          .from("user_progress")
-          .select("progress")
-          .eq("user_id", userId)
-          .maybeSingle();
-
-      if (cancelled) return;
-
-      if (error) {
-        console.error("Unable to load progress:", error.message);
-      } else if (data?.progress) {
-        const saved = data.progress as {
-          progress?: Progress;
-          activities?: ActivityItem[];
-          studyHours?: number[];
-          studySessions?: StudySessionItem[];
-          goals?: GoalItem[];
-          tests?: TestItem[];
-          calendarItems?: CalendarItem[];
-          notes?: NoteItem[];
-        };
-
-        setProgress(saved.progress || {});
-        setActivities(saved.activities || []);
-        setStudyHours(saved.studyHours || defaultStudyHours);
-        setStudySessions(saved.studySessions || []);
-        setGoals(saved.goals || []);
-        setTests(saved.tests || []);
-        setCalendarItems(saved.calendarItems || []);
-        setNotes(saved.notes || []);
-      }
-
-      dataReadyRef.current = true;
-      setDataReady(true);
-    };
-
-    loadUserData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
-
-
-
-
-
   const saveProgress = async () => {
     if (!userId) {
       onRequireAuth();
       return;
     }
-
-    if (!supabase || !dataReady) return;
-    setSaveStatus("saving");
-    const { error } = await supabase.from("user_progress").upsert({
-      user_id: userId,
-      progress: {
-        progress,
-        activities,
-        studyHours,
-        studySessions,
-        goals,
-        tests,
-        calendarItems,
-        notes,
-      },
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "user_id" });
-
-    if (error) {
-      console.error("Unable to save progress:", error.message);
-      setSaveStatus("error");
-      return;
-    }
-    setSaveStatus("saved");
-    window.setTimeout(() => setSaveStatus("idle"), 1800);
+    await saveStoredProgress();
   };
 
   useEffect(() => {
@@ -2496,8 +2257,6 @@ function ActivityView({
 /* =========================================================
    PERSONALISED WORKSPACE PAGES
 ========================================================= */
-
-type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 function WorkspaceHeader({ title, text, onSave, saveStatus }: {
   title: string;
