@@ -29,6 +29,7 @@ import {
   LogIn,
   LogOut,
   Menu,
+  MessageCircle,
   NotebookPen,
   Plus,
   Save,
@@ -38,10 +39,13 @@ import {
   Trophy,
 } from "lucide-react";
 
+import CommunityChat from "@/components/CommunityChat";
+
 import {
   syllabus,
   SubjectName,
 } from "@/lib/syllabus";
+
 import {
   ActivityItem,
   CalendarItem,
@@ -61,6 +65,7 @@ import {
 
 type View =
   | "Dashboard"
+  | "Community"
   | "Subjects"
   | "Chapters"
   | "Analytics"
@@ -112,7 +117,10 @@ const stages: {
   },
 ];
 
-const stagePrerequisites: Record<Stage, Stage | null> = {
+const stagePrerequisites: Record<
+  Stage,
+  Stage | null
+> = {
   done: null,
   revision1: "done",
   revision2: "revision1",
@@ -120,9 +128,23 @@ const stagePrerequisites: Record<Stage, Stage | null> = {
   test2Done: "testDone",
 };
 
-const stageDependsOn = (stage: Stage, earlierStage: Stage): boolean => {
-  const prerequisite = stagePrerequisites[stage];
-  return prerequisite === earlierStage || Boolean(prerequisite && stageDependsOn(prerequisite, earlierStage));
+const stageDependsOn = (
+  stage: Stage,
+  earlierStage: Stage
+): boolean => {
+  const prerequisite =
+    stagePrerequisites[stage];
+
+  return (
+    prerequisite === earlierStage ||
+    Boolean(
+      prerequisite &&
+        stageDependsOn(
+          prerequisite,
+          earlierStage
+        )
+    )
+  );
 };
 
 const menu: {
@@ -132,6 +154,10 @@ const menu: {
   {
     label: "Dashboard",
     icon: Home,
+  },
+  {
+    label: "Community",
+    icon: MessageCircle,
   },
   {
     label: "Subjects",
@@ -175,10 +201,18 @@ const menu: {
   },
 ];
 
-const publicViews: View[] = ["Dashboard", "Subjects", "Chapters"];
+const publicViews: View[] = [
+  "Dashboard",
+  "Subjects",
+  "Chapters",
+];
 
-const viewRoutes: Record<View, string> = {
+const viewRoutes: Record<
+  View,
+  string
+> = {
   Dashboard: "/dashboard",
+  Community: "/community",
   Subjects: "/subjects",
   Chapters: "/chapters",
   Analytics: "/analytics",
@@ -266,6 +300,7 @@ export default function Tracker({
   authPage?: AuthMode;
 }) {
   const router = useRouter();
+
   const {
     session,
     authLoading,
@@ -279,39 +314,68 @@ export default function Tracker({
     requireAuth,
   } = useProgress();
 
-  const [authMode, setAuthMode] =
-    useState<AuthMode>(authPage || "login");
+  const [
+    authMode,
+    setAuthMode,
+  ] = useState<AuthMode>(
+    authPage || "login"
+  );
 
-  const [email, setEmail] =
-    useState("");
+  const [
+    email,
+    setEmail,
+  ] = useState("");
 
-  const [password, setPassword] =
-    useState("");
+  const [
+    password,
+    setPassword,
+  ] = useState("");
 
-  const [authError, setAuthError] =
-    useState("");
+  const [
+    authError,
+    setAuthError,
+  ] = useState("");
 
-  const [authMessage, setAuthMessage] =
-    useState("");
+  const [
+    authMessage,
+    setAuthMessage,
+  ] = useState("");
 
-  const [submitting, setSubmitting] =
-    useState(false);
+  const [
+    submitting,
+    setSubmitting,
+  ] = useState(false);
 
-  const [showLoginPrompt, setShowLoginPrompt] =
-    useState(false);
+  const [
+    showLoginPrompt,
+    setShowLoginPrompt,
+  ] = useState(false);
 
   useEffect(() => {
-    if (authPage) setAuthMode(authPage);
+    if (authPage) {
+      setAuthMode(authPage);
+    }
   }, [authPage]);
 
   useEffect(() => {
     if (authLoading) return;
+
     if (session && authPage) {
       router.replace("/dashboard");
-    } else if (!session && !guestMode && !authPage) {
+    } else if (
+      !session &&
+      !guestMode &&
+      !authPage
+    ) {
       router.replace("/login");
     }
-  }, [authLoading, authPage, guestMode, router, session]);
+  }, [
+    authLoading,
+    authPage,
+    guestMode,
+    router,
+    session,
+  ]);
 
   /* =======================================================
      LOGIN / SIGNUP
@@ -328,13 +392,29 @@ export default function Tracker({
 
     try {
       if (authMode === "login") {
-        const error = await signIn(email, password);
-        if (error) setAuthError(error);
+        const error =
+          await signIn(
+            email,
+            password
+          );
+
+        if (error) {
+          setAuthError(error);
+        }
       } else {
-        const result = await signUp(email, password);
+        const result =
+          await signUp(
+            email,
+            password
+          );
+
         if (result.error) {
-          setAuthError(result.error);
-        } else if (result.needsConfirmation) {
+          setAuthError(
+            result.error
+          );
+        } else if (
+          result.needsConfirmation
+        ) {
           setAuthMessage(
             "Account created. Please check your email to confirm your account."
           );
@@ -348,33 +428,38 @@ export default function Tracker({
       setSubmitting(false);
     }
   };
-  const handleGoogleSignIn = async () => {
-  setAuthError("");
-  setAuthMessage("");
-  setSubmitting(true);
 
-  try {
-    const error = await signInWithGoogle();
+  const handleGoogleSignIn =
+    async () => {
+      setAuthError("");
+      setAuthMessage("");
+      setSubmitting(true);
 
-    if (error) {
-      setAuthError(error);
-      setSubmitting(false);
-    }
-  } catch {
-    setAuthError(
-      "Unable to continue with Google. Please try again."
-    );
-    setSubmitting(false);
-  }
-};
+      try {
+        const error =
+          await signInWithGoogle();
+
+        if (error) {
+          setAuthError(error);
+          setSubmitting(false);
+        }
+      } catch {
+        setAuthError(
+          "Unable to continue with Google. Please try again."
+        );
+
+        setSubmitting(false);
+      }
+    };
 
   /* =======================================================
      LOGOUT
   ======================================================= */
 
-  const handleLogout = async () => {
-    await signOut();
-  };
+  const handleLogout =
+    async () => {
+      await signOut();
+    };
 
   /* =======================================================
      LOADING
@@ -384,6 +469,7 @@ export default function Tracker({
     return (
       <div className="auth-loading">
         <div className="auth-spinner" />
+
         <p>
           Loading CA Progress...
         </p>
@@ -424,16 +510,28 @@ export default function Tracker({
      AUTH SCREEN
   ======================================================= */
 
-  if (session && authPage) {
+  if (
+    session &&
+    authPage
+  ) {
     return (
       <div className="auth-loading">
         <div className="auth-spinner" />
-        <p>Opening your dashboard...</p>
+
+        <p>
+          Opening your dashboard...
+        </p>
       </div>
     );
   }
 
-  if (!session && (!guestMode || Boolean(authPage))) {
+  if (
+    !session &&
+    (
+      !guestMode ||
+      Boolean(authPage)
+    )
+  ) {
     return (
       <>
         <div className="auth-page">
@@ -456,14 +554,16 @@ export default function Tracker({
               <h1>
                 Your preparation.
                 <br />
+
                 <span>
                   Clearly tracked.
                 </span>
               </h1>
 
               <p>
-                Track chapters, revisions,
-                tests and your preparation
+                Track chapters,
+                revisions, tests
+                and your preparation
                 progress in one focused
                 workspace.
               </p>
@@ -502,7 +602,8 @@ export default function Tracker({
             </div>
 
             <div className="auth-footer">
-              Built for focused CA preparation.
+              Built for focused CA
+              preparation.
             </div>
           </div>
 
@@ -582,18 +683,23 @@ export default function Tracker({
                     ? "Sign in"
                     : "Create account"}
                 </button>
-                <button
-  type="button"
-  className="auth-google"
-  onClick={handleGoogleSignIn}
-  disabled={submitting}
->
-  Continue with Google
-</button>
 
-<div className="auth-divider">
-  <span>or continue with email</span>
-</div>
+                <button
+                  type="button"
+                  className="auth-google"
+                  onClick={
+                    handleGoogleSignIn
+                  }
+                  disabled={submitting}
+                >
+                  Continue with Google
+                </button>
+
+                <div className="auth-divider">
+                  <span>
+                    or continue with email
+                  </span>
+                </div>
               </form>
 
               <div className="auth-switch">
@@ -604,9 +710,21 @@ export default function Tracker({
                 <button
                   type="button"
                   onClick={() => {
-                    const nextMode = authMode === "login" ? "signup" : "login";
-                    setAuthMode(nextMode);
-                    router.push(nextMode === "signup" ? "/signup" : "/login");
+                    const nextMode =
+                      authMode === "login"
+                        ? "signup"
+                        : "login";
+
+                    setAuthMode(
+                      nextMode
+                    );
+
+                    router.push(
+                      nextMode ===
+                        "signup"
+                        ? "/signup"
+                        : "/login"
+                    );
 
                     setAuthError("");
                     setAuthMessage("");
@@ -624,22 +742,28 @@ export default function Tracker({
                 onClick={() => {
                   setAuthError("");
                   setAuthMessage("");
+
                   continueAsGuest();
-                  router.push("/dashboard");
+
+                  router.push(
+                    "/dashboard"
+                  );
                 }}
               >
                 Continue without an account
               </button>
 
               <p className="auth-guest-note">
-                Browse subjects and chapters freely. Sign in only when you want
-                to track and save your progress.
+                Browse subjects and chapters
+                freely. Sign in only when you
+                want to track and save your
+                progress.
               </p>
 
               {!configured && (
                 <div className="auth-config-warning">
-                  Supabase environment variables
-                  are missing.
+                  Supabase environment
+                  variables are missing.
                 </div>
               )}
             </div>
@@ -659,30 +783,96 @@ export default function Tracker({
     <>
       <TrackerDashboard
         initialView={initialView}
-        email={session?.user.email || ""}
-        userId={session?.user.id || null}
+        email={
+          session?.user.email || ""
+        }
+        userId={
+          session?.user.id || null
+        }
         onLogout={handleLogout}
-        onRequireAuth={() => setShowLoginPrompt(true)}
+        onRequireAuth={() =>
+          setShowLoginPrompt(true)
+        }
       />
 
       {showLoginPrompt && (
         <div
           className="login-prompt-backdrop"
           role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setShowLoginPrompt(false);
+          onMouseDown={(
+            event
+          ) => {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
+              setShowLoginPrompt(false);
+            }
           }}
         >
-          <section className="login-prompt" role="dialog" aria-modal="true" aria-labelledby="login-prompt-title">
-            <button className="login-prompt-close" onClick={() => setShowLoginPrompt(false)} aria-label="Close login prompt">×</button>
-            <div className="login-prompt-icon"><LogIn size={24} /></div>
-            <h2 id="login-prompt-title">Login required</h2>
-            <p>Please sign in or create an account to use this feature and securely sync your progress.</p>
-            <div className="login-prompt-actions">
-              <button className="login-prompt-primary" onClick={() => { setShowLoginPrompt(false); requireAuth(); router.push("/login"); }}>Sign in</button>
-              <button className="login-prompt-secondary" onClick={() => { setShowLoginPrompt(false); requireAuth(); router.push("/signup"); }}>Create account</button>
+          <section
+            className="login-prompt"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="login-prompt-title"
+          >
+            <button
+              className="login-prompt-close"
+              onClick={() =>
+                setShowLoginPrompt(false)
+              }
+              aria-label="Close login prompt"
+            >
+              ×
+            </button>
+
+            <div className="login-prompt-icon">
+              <LogIn size={24} />
             </div>
-            <button className="login-prompt-later" onClick={() => setShowLoginPrompt(false)}>Not now</button>
+
+            <h2 id="login-prompt-title">
+              Login required
+            </h2>
+
+            <p>
+              Please sign in or create an
+              account to use this feature
+              and securely sync your
+              progress.
+            </p>
+
+            <div className="login-prompt-actions">
+              <button
+                className="login-prompt-primary"
+                onClick={() => {
+                  setShowLoginPrompt(false);
+                  requireAuth();
+                  router.push("/login");
+                }}
+              >
+                Sign in
+              </button>
+
+              <button
+                className="login-prompt-secondary"
+                onClick={() => {
+                  setShowLoginPrompt(false);
+                  requireAuth();
+                  router.push("/signup");
+                }}
+              >
+                Create account
+              </button>
+            </div>
+
+            <button
+              className="login-prompt-later"
+              onClick={() =>
+                setShowLoginPrompt(false)
+              }
+            >
+              Not now
+            </button>
           </section>
         </div>
       )}
@@ -740,6 +930,7 @@ function TrackerDashboard({
   onRequireAuth: () => void;
 }) {
   const router = useRouter();
+
   const {
     progress,
     setProgress,
@@ -758,7 +949,8 @@ function TrackerDashboard({
     notes,
     setNotes,
     saveStatus,
-    saveProgress: saveStoredProgress,
+    saveProgress:
+      saveStoredProgress,
   } = useProgress();
 
   const subjects =
@@ -784,52 +976,123 @@ function TrackerDashboard({
     [subjects]
   );
 
-  const [view, setView] =
-    useState<View>(() => {
-      if (!userId && !publicViews.includes(initialView)) return "Dashboard";
-      if (initialView !== "Dashboard") return initialView;
-      if (typeof window === "undefined") return initialView;
-      const savedView = window.localStorage.getItem("ca-progress-view") as View | null;
-      return menu.some((item) => item.label === savedView) &&
-        (Boolean(userId) || publicViews.includes(savedView as View))
-        ? savedView!
-        : initialView;
-    });
-
-  useEffect(() => {
-    if (!userId && !publicViews.includes(view)) {
-      setView("Dashboard");
-      router.replace(viewRoutes.Dashboard);
+  const [
+    view,
+    setView,
+  ] = useState<View>(() => {
+    if (
+      !userId &&
+      !publicViews.includes(
+        initialView
+      )
+    ) {
+      return "Dashboard";
     }
-  }, [router, userId, view]);
+
+    if (
+      initialView !==
+      "Dashboard"
+    ) {
+      return initialView;
+    }
+
+    if (
+      typeof window ===
+      "undefined"
+    ) {
+      return initialView;
+    }
+
+    const savedView =
+      window.localStorage.getItem(
+        "ca-progress-view"
+      ) as View | null;
+
+    return menu.some(
+      (item) =>
+        item.label === savedView
+    ) &&
+      (
+        Boolean(userId) ||
+        publicViews.includes(
+          savedView as View
+        )
+      )
+      ? savedView!
+      : initialView;
+  });
 
   useEffect(() => {
-    if (userId || publicViews.includes(initialView)) {
+    if (
+      !userId &&
+      !publicViews.includes(
+        view
+      )
+    ) {
+      setView("Dashboard");
+
+      router.replace(
+        viewRoutes.Dashboard
+      );
+    }
+  }, [
+    router,
+    userId,
+    view,
+  ]);
+
+  useEffect(() => {
+    if (
+      userId ||
+      publicViews.includes(
+        initialView
+      )
+    ) {
       setView(initialView);
     }
-  }, [initialView, userId]);
+  }, [
+    initialView,
+    userId,
+  ]);
 
   const [
     activeSubject,
     setActiveSubject,
-  ] =
-    useState<SubjectName>(() => {
-      if (typeof window === "undefined") return subjects[0];
-      const saved = window.localStorage.getItem("ca-progress-subject") as SubjectName | null;
-      return saved && subjects.includes(saved) ? saved : subjects[0];
-    });
+  ] = useState<SubjectName>(() => {
+    if (
+      typeof window ===
+      "undefined"
+    ) {
+      return subjects[0];
+    }
 
-  const [search, setSearch] =
-    useState("");
+    const saved =
+      window.localStorage.getItem(
+        "ca-progress-subject"
+      ) as SubjectName | null;
+
+    return (
+      saved &&
+      subjects.includes(saved)
+    )
+      ? saved
+      : subjects[0];
+  });
+
+  const [
+    search,
+    setSearch,
+  ] = useState("");
 
   const [
     sidebarOpen,
     setSidebarOpen,
-  ] =
-    useState(false);
+  ] = useState(false);
 
-  const [toast, setToast] =
-    useState("");
+  const [
+    toast,
+    setToast,
+  ] = useState("");
 
   const firstName =
     email
@@ -847,16 +1110,21 @@ function TrackerDashboard({
       .charAt(0)
       .toUpperCase() || "C";
 
-  const saveProgress = async () => {
-    if (!userId) {
-      onRequireAuth();
-      return;
-    }
-    await saveStoredProgress();
-  };
+  const saveProgress =
+    async () => {
+      if (!userId) {
+        onRequireAuth();
+        return;
+      }
+
+      await saveStoredProgress();
+    };
 
   useEffect(() => {
-    window.localStorage.setItem("ca-progress-view", view);
+    window.localStorage.setItem(
+      "ca-progress-view",
+      view
+    );
   }, [view]);
 
   /* =======================================================
@@ -916,8 +1184,10 @@ function TrackerDashboard({
       percent:
         chapters.length
           ? Math.round(
-              (done /
-                chapters.length) *
+              (
+                done /
+                chapters.length
+              ) *
                 100
             )
           : 0,
@@ -927,8 +1197,10 @@ function TrackerDashboard({
   const overall =
     allRows.length
       ? Math.round(
-          (counts.done /
-            allRows.length) *
+          (
+            counts.done /
+            allRows.length
+          ) *
             100
         )
       : 0;
@@ -973,21 +1245,49 @@ function TrackerDashboard({
         ]
       );
 
-    const previousStage = stagePrerequisites[stage];
+    const previousStage =
+      stagePrerequisites[
+        stage
+      ];
 
-    if (!wasOn && previousStage && !progress[key]?.[previousStage]) {
+    if (
+      !wasOn &&
+      previousStage &&
+      !progress[key]?.[
+        previousStage
+      ]
+    ) {
       return;
     }
 
     setProgress(
       (current) => {
-        const nextStages = { ...current[key], [stage]: !wasOn };
+        const nextStages = {
+          ...current[key],
+          [stage]: !wasOn,
+        };
+
         if (wasOn) {
-          stages.forEach((laterStage) => {
-            if (stageDependsOn(laterStage.key, stage)) nextStages[laterStage.key] = false;
-          });
+          stages.forEach(
+            (laterStage) => {
+              if (
+                stageDependsOn(
+                  laterStage.key,
+                  stage
+                )
+              ) {
+                nextStages[
+                  laterStage.key
+                ] = false;
+              }
+            }
+          );
         }
-        return { ...current, [key]: nextStages };
+
+        return {
+          ...current,
+          [key]: nextStages,
+        };
       }
     );
 
@@ -998,28 +1298,20 @@ function TrackerDashboard({
             {
               id:
                 `${Date.now()}-${key}-${stage}`,
-
               chapter,
-
               subject,
-
               stage,
-
               time:
                 "Just now",
             },
-
             ...current,
           ].slice(
             0,
             50
           )
       );
-
-
     }
   };
-
   const nav = (
     label: View
   ) => {
@@ -1155,18 +1447,32 @@ function TrackerDashboard({
               {view ===
               "Dashboard"
                 ? "Discipline today, success tomorrow."
-                : "Track every step of your CA Intermediate preparation."}
+                : view === "Community"
+                  ? "Connect, discuss and study together with fellow CA students."
+                  : "Track every step of your CA Intermediate preparation."}
             </p>
           </div>
 
           <div className="top-actions">
-            <button className="icon-button" onClick={() => nav("Chapters")} title="Search chapters">
+            <button
+              className="icon-button"
+              onClick={() =>
+                nav("Chapters")
+              }
+              title="Search chapters"
+            >
               <Search
                 size={19}
               />
             </button>
 
-            <button className="icon-button" onClick={() => nav("Activity")} title="View activity">
+            <button
+              className="icon-button"
+              onClick={() =>
+                nav("Activity")
+              }
+              title="View activity"
+            >
               <Bell
                 size={19}
               />
@@ -1187,11 +1493,20 @@ function TrackerDashboard({
                 title="Sign in to track progress"
               >
                 <LogIn size={17} />
-                <span>Sign in</span>
+
+                <span>
+                  Sign in
+                </span>
               </button>
             )}
 
-            <button className="avatar large" onClick={() => nav("Settings")} title="Account settings">
+            <button
+              className="avatar large"
+              onClick={() =>
+                nav("Settings")
+              }
+              title="Account settings"
+            >
               {initial}
             </button>
           </div>
@@ -1219,15 +1534,39 @@ function TrackerDashboard({
               activities
             }
             studyHours={
-              userId ? studyHours : [0, 0, 0, 0, 0, 0, 0]
+              userId
+                ? studyHours
+                : [0, 0, 0, 0, 0, 0, 0]
             }
-            onSubjects={() => nav("Subjects")}
-            onQuickStudy={() => nav("Study Sessions")}
-            onQuickTest={() => nav("Test Series")}
-            onQuickGoal={() => nav("Goals")}
-            onQuickCalendar={() => nav("Calendar")}
-            onViewAll={() => nav("Activity")}
+            onSubjects={() =>
+              nav("Subjects")
+            }
+            onQuickStudy={() =>
+              nav("Study Sessions")
+            }
+            onQuickTest={() =>
+              nav("Test Series")
+            }
+            onQuickGoal={() =>
+              nav("Goals")
+            }
+            onQuickCalendar={() =>
+              nav("Calendar")
+            }
+            onViewAll={() =>
+              nav("Activity")
+            }
           />
+        )}
+
+        {/* COMMUNITY */}
+        {view === "Community" && (
+          userId ? (
+            <CommunityChat
+              userId={userId}
+              email={email}
+            />
+          ) : null
         )}
 
         {view ===
@@ -1245,7 +1584,12 @@ function TrackerDashboard({
               setActiveSubject(
                 subject
               );
-              window.localStorage.setItem("ca-progress-subject", subject);
+
+              window.localStorage.setItem(
+                "ca-progress-subject",
+                subject
+              );
+
               nav("Chapters");
             }}
           />
@@ -1284,7 +1628,9 @@ function TrackerDashboard({
             saveStatus={
               saveStatus
             }
-            onBack={() => nav("Subjects")}
+            onBack={() =>
+              nav("Subjects")
+            }
           />
         )}
 
@@ -1326,14 +1672,31 @@ function TrackerDashboard({
             subjects={subjects}
             items={studySessions}
             setItems={setStudySessions}
-            onAddMinutes={(minutes) => setStudyHours((hours) => [
-              ...hours.slice(0, 6),
-              Number((hours[6] + minutes / 60).toFixed(1)),
-            ])}
-            onDeleteMinutes={(minutes) => setStudyHours((hours) => [
-              ...hours.slice(0, 6),
-              Math.max(0, Number((hours[6] - minutes / 60).toFixed(1))),
-            ])}
+            onAddMinutes={(minutes) =>
+              setStudyHours((hours) => [
+                ...hours.slice(0, 6),
+                Number(
+                  (
+                    hours[6] +
+                    minutes / 60
+                  ).toFixed(1)
+                ),
+              ])
+            }
+            onDeleteMinutes={(minutes) =>
+              setStudyHours((hours) => [
+                ...hours.slice(0, 6),
+                Math.max(
+                  0,
+                  Number(
+                    (
+                      hours[6] -
+                      minutes / 60
+                    ).toFixed(1)
+                  )
+                ),
+              ])
+            }
             onSave={saveProgress}
             saveStatus={saveStatus}
           />
@@ -1387,7 +1750,6 @@ function TrackerDashboard({
             }
           />
         )}
-
       </section>
     </main>
   );
@@ -1412,7 +1774,8 @@ function Dashboard({
   onQuickCalendar,
   onViewAll,
 }: any) {
-  const recent = activities.slice(0, 4);
+  const recent =
+    activities.slice(0, 4);
 
   return (
     <>
@@ -1560,9 +1923,15 @@ function Dashboard({
               />
 
               <Metric
-                icon={<ClipboardCheck size={16} />}
+                icon={
+                  <ClipboardCheck
+                    size={16}
+                  />
+                }
                 label="Test 2"
-                value={counts.test2Done}
+                value={
+                  counts.test2Done
+                }
               />
             </div>
           </div>
@@ -1585,10 +1954,12 @@ function Dashboard({
                 value={
                   total
                     ? Math.round(
-                        (counts[
-                          stage.key
-                        ] /
-                          total) *
+                        (
+                          counts[
+                            stage.key
+                          ] /
+                          total
+                        ) *
                           100
                       )
                     : 0
@@ -1609,7 +1980,8 @@ function Dashboard({
                 (
                   a: number,
                   b: number
-                ) => a + b,
+                ) =>
+                  a + b,
                 0
               )
               .toFixed(1)}
@@ -1683,20 +2055,26 @@ function Dashboard({
             </button>
           </div>
 
-          {recent.length ? recent.map(
-            (
-              item: ActivityItem
-            ) => (
-              <RecentRow
-                key={
-                  item.id
-                }
-                item={
-                  item
-                }
-              />
-            )
-          ) : <div className="dashboard-empty">No saved activity yet.</div>}
+          {recent.length
+            ? recent.map(
+                (
+                  item: ActivityItem
+                ) => (
+                  <RecentRow
+                    key={
+                      item.id
+                    }
+                    item={
+                      item
+                    }
+                  />
+                )
+              )
+            : (
+              <div className="dashboard-empty">
+                No saved activity yet.
+              </div>
+            )}
         </section>
 
         <section className="panel quick-panel">
@@ -1729,7 +2107,11 @@ function Dashboard({
               </span>
             </button>
 
-            <button onClick={onQuickGoal}>
+            <button
+              onClick={
+                onQuickGoal
+              }
+            >
               <Goal />
 
               <span>
@@ -1737,7 +2119,11 @@ function Dashboard({
               </span>
             </button>
 
-            <button onClick={onQuickCalendar}>
+            <button
+              onClick={
+                onQuickCalendar
+              }
+            >
               <CalendarDays />
 
               <span>
@@ -1887,7 +2273,10 @@ function ChaptersView({
     <section className="chapters-page">
       <div className="chapter-top">
         <div>
-          <button className="back-link" onClick={onBack}>
+          <button
+            className="back-link"
+            onClick={onBack}
+          >
             ‹ Back to Subjects
           </button>
 
@@ -1918,9 +2307,18 @@ function ChaptersView({
             activeSubject
           }
           onChange={(event) => {
-            const subject = event.target.value as SubjectName;
-            setActiveSubject(subject);
-            window.localStorage.setItem("ca-progress-subject", subject);
+            const subject =
+              event.target
+                .value as SubjectName;
+
+            setActiveSubject(
+              subject
+            );
+
+            window.localStorage.setItem(
+              "ca-progress-subject",
+              subject
+            );
           }}
         >
           {subjects.map(
@@ -1939,8 +2337,14 @@ function ChaptersView({
 
       <div className="chapter-toolbar">
         <div className="chapter-toolbar-copy">
-          <strong>{rows.length} Chapters</strong>
-          <span>Complete each stage in order, then save your changes.</span>
+          <strong>
+            {rows.length} Chapters
+          </strong>
+
+          <span>
+            Complete each stage in order,
+            then save your changes.
+          </span>
         </div>
 
         <div className="chapter-toolbar-actions">
@@ -1969,14 +2373,21 @@ function ChaptersView({
             type="button"
             className={`chapter-save-button ${saveStatus}`}
             onClick={onSaveProgress}
-            disabled={saveStatus === "saving"}
+            disabled={
+              saveStatus ===
+              "saving"
+            }
           >
             <Save size={15} />
-            {saveStatus === "saving"
+
+            {saveStatus ===
+            "saving"
               ? "Saving..."
-              : saveStatus === "saved"
+              : saveStatus ===
+                "saved"
                 ? "Saved ✓"
-                : saveStatus === "error"
+                : saveStatus ===
+                  "error"
                   ? "Try Again"
                   : "Save Progress"}
           </button>
@@ -1996,9 +2407,7 @@ function ChaptersView({
                   stage.key
                 }
               >
-                {
-                  stage.short
-                }
+                {stage.short}
               </span>
             )
           )}
@@ -2018,11 +2427,9 @@ function ChaptersView({
             return (
               <div
                 className="chapter-row"
-                key={
-                  chapter
-                }
+                key={key}
               >
-                <span>
+                <span className="chapter-name">
                   <b>
                     {index + 1}
                   </b>
@@ -2032,44 +2439,67 @@ function ChaptersView({
 
                 {stages.map(
                   (stage) => {
-                    const previousStage = stagePrerequisites[stage.key];
-                    const locked = Boolean(previousStage && !progress[key]?.[previousStage]);
-                    return (
-                    <button
-                      key={
-                        stage.key
-                      }
-                      title={locked && previousStage ? `Complete ${stages.find((item) => item.key === previousStage)?.label} first` : stage.label}
-                      disabled={locked}
-                      className={`stage-dot ${
+                    const checked =
+                      Boolean(
                         progress[
                           key
                         ]?.[
                           stage.key
                         ]
-                          ? `on ${stage.key}`
-                          : ""
-                      } ${locked ? "locked" : ""}`}
-                      onClick={() =>
-                        toggle(
-                          activeSubject,
-                          chapter,
-                          stage.key
-                        )
-                      }
-                    >
-                      {progress[
-                        key
-                      ]?.[
+                      );
+
+                    const prerequisite =
+                      stagePrerequisites[
                         stage.key
-                      ] && (
-                        <Check
-                          size={
-                            13
+                      ];
+
+                    const disabled =
+                      Boolean(
+                        prerequisite &&
+                          !progress[
+                            key
+                          ]?.[
+                            prerequisite
+                          ]
+                      );
+
+                    return (
+                      <span
+                        key={
+                          stage.key
+                        }
+                        className="stage-cell"
+                      >
+                        <button
+                          type="button"
+                          disabled={
+                            disabled
                           }
-                        />
-                      )}
-                    </button>
+                          className={
+                            checked
+                              ? "stage-toggle checked"
+                              : "stage-toggle"
+                          }
+                          onClick={() =>
+                            toggle(
+                              activeSubject,
+                              chapter,
+                              stage.key
+                            )
+                          }
+                          title={
+                            disabled
+                              ? "Complete the previous stage first"
+                              : stage.label
+                          }
+                        >
+                          {checked && (
+                            <Check
+                              size={14}
+                            />
+                          )}
+                        </button>
+                      </span>
                     );
                   }
                 )}
@@ -2077,32 +2507,16 @@ function ChaptersView({
             );
           }
         )}
-      </div>
 
-      <div className="status-legend">
-        {stages.map(
-          (stage) => (
-            <span
-              key={
-                stage.key
-              }
-              className={
-                stage.key
-              }
-            >
-              <i />
-
-              {
-                stage.label
-              }
-            </span>
-          )
+        {!rows.length && (
+          <div className="chapter-empty">
+            No chapters found.
+          </div>
         )}
       </div>
     </section>
   );
 }
-
 /* =========================================================
    ANALYTICS
 ========================================================= */
@@ -2268,10 +2682,12 @@ function AnalyticsView({
               value={
                 total
                   ? Math.round(
-                      (counts[
-                        stage.key
-                      ] /
-                        total) *
+                      (
+                        counts[
+                          stage.key
+                        ] /
+                        total
+                      ) *
                         100
                     )
                   : 0
@@ -2348,7 +2764,12 @@ function ActivityView({
    PERSONALISED WORKSPACE PAGES
 ========================================================= */
 
-function WorkspaceHeader({ title, text, onSave, saveStatus }: {
+function WorkspaceHeader({
+  title,
+  text,
+  onSave,
+  saveStatus,
+}: {
   title: string;
   text: string;
   onSave: () => void;
@@ -2356,95 +2777,1047 @@ function WorkspaceHeader({ title, text, onSave, saveStatus }: {
 }) {
   return (
     <div className="page-heading workspace-heading">
-      <div><h2>{title}</h2><p>{text}</p></div>
-      <button className={`workspace-save ${saveStatus}`} onClick={onSave} disabled={saveStatus === "saving"}>
-        {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved ✓" : saveStatus === "error" ? "Try Again" : "Save Changes"}
+      <div>
+        <h2>
+          {title}
+        </h2>
+
+        <p>
+          {text}
+        </p>
+      </div>
+
+      <button
+        className={`workspace-save ${saveStatus}`}
+        onClick={onSave}
+        disabled={
+          saveStatus ===
+          "saving"
+        }
+      >
+        {saveStatus ===
+        "saving"
+          ? "Saving..."
+          : saveStatus ===
+            "saved"
+            ? "Saved ✓"
+            : saveStatus ===
+              "error"
+              ? "Try Again"
+              : "Save Changes"}
       </button>
     </div>
   );
 }
 
-function StudySessionsView({ subjects, items, setItems, onAddMinutes, onDeleteMinutes, onSave, saveStatus }: {
+function StudySessionsView({
+  subjects,
+  items,
+  setItems,
+  onAddMinutes,
+  onDeleteMinutes,
+  onSave,
+  saveStatus,
+}: {
   subjects: SubjectName[];
   items: StudySessionItem[];
-  setItems: Dispatch<SetStateAction<StudySessionItem[]>>;
-  onAddMinutes: (minutes: number) => void;
-  onDeleteMinutes: (minutes: number) => void;
+  setItems: Dispatch<
+    SetStateAction<
+      StudySessionItem[]
+    >
+  >;
+  onAddMinutes: (
+    minutes: number
+  ) => void;
+  onDeleteMinutes: (
+    minutes: number
+  ) => void;
   onSave: () => void;
   saveStatus: SaveStatus;
 }) {
-  const [subject, setSubject] = useState<SubjectName>(subjects[0]);
-  const [minutes, setMinutes] = useState("30");
-  const add = (event: FormEvent) => {
+  const [
+    subject,
+    setSubject,
+  ] = useState<SubjectName>(
+    subjects[0]
+  );
+
+  const [
+    minutes,
+    setMinutes,
+  ] = useState("30");
+
+  const add = (
+    event: FormEvent
+  ) => {
     event.preventDefault();
-    const value = Number(minutes);
-    if (!value || value < 1) return;
-    setItems((current) => [{ id: crypto.randomUUID(), subject, minutes: value, date: new Date().toISOString() }, ...current]);
-    onAddMinutes(value);
-    setMinutes("30");
+
+    const value =
+      Number(minutes);
+
+    if (
+      !value ||
+      value < 1
+    ) {
+      return;
+    }
+
+    setItems(
+      (current) => [
+        {
+          id:
+            crypto.randomUUID(),
+          subject,
+          minutes:
+            value,
+          date:
+            new Date()
+              .toISOString(),
+        },
+        ...current,
+      ]
+    );
+
+    onAddMinutes(
+      value
+    );
+
+    setMinutes(
+      "30"
+    );
   };
-  const total = items.reduce((sum, item) => sum + item.minutes, 0);
+
+  const total =
+    items.reduce(
+      (
+        sum,
+        item
+      ) =>
+        sum +
+        item.minutes,
+      0
+    );
+
   return (
     <section className="single-page workspace-page">
-      <WorkspaceHeader title="Study Sessions" text="Log focused study time by subject." onSave={onSave} saveStatus={saveStatus} />
-      <div className="workspace-summary"><b>{Math.floor(total / 60)}h {total % 60}m</b><span>Total focused time</span></div>
-      <form className="workspace-form panel" onSubmit={add}>
-        <select value={subject} onChange={(e) => setSubject(e.target.value as SubjectName)}>{subjects.map((item) => <option key={item}>{item}</option>)}</select>
-        <input type="number" min="1" max="1440" value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="Minutes" required />
-        <button type="submit"><Plus size={16} /> Add Session</button>
+      <WorkspaceHeader
+        title="Study Sessions"
+        text="Log focused study time by subject."
+        onSave={
+          onSave
+        }
+        saveStatus={
+          saveStatus
+        }
+      />
+
+      <div className="workspace-summary">
+        <b>
+          {Math.floor(
+            total / 60
+          )}
+          h{" "}
+          {total % 60}
+          m
+        </b>
+
+        <span>
+          Total focused time
+        </span>
+      </div>
+
+      <form
+        className="workspace-form panel"
+        onSubmit={add}
+      >
+        <select
+          value={
+            subject
+          }
+          onChange={(
+            event
+          ) =>
+            setSubject(
+              event.target
+                .value as SubjectName
+            )
+          }
+        >
+          {subjects.map(
+            (item) => (
+              <option
+                key={
+                  item
+                }
+              >
+                {item}
+              </option>
+            )
+          )}
+        </select>
+
+        <input
+          type="number"
+          min="1"
+          max="1440"
+          value={
+            minutes
+          }
+          onChange={(
+            event
+          ) =>
+            setMinutes(
+              event.target
+                .value
+            )
+          }
+          placeholder="Minutes"
+          required
+        />
+
+        <button
+          type="submit"
+        >
+          <Plus
+            size={16}
+          />
+
+          Add Session
+        </button>
       </form>
-      <WorkspaceList empty="No study sessions logged yet.">{items.map((item) => <WorkspaceRow key={item.id} title={item.subject} meta={`${item.minutes} minutes • ${new Date(item.date).toLocaleDateString()}`} onDelete={() => { setItems((all) => all.filter((entry) => entry.id !== item.id)); onDeleteMinutes(item.minutes); }} />)}</WorkspaceList>
+
+      <WorkspaceList
+        empty="No study sessions logged yet."
+      >
+        {items.map(
+          (item) => (
+            <WorkspaceRow
+              key={
+                item.id
+              }
+              title={
+                item.subject
+              }
+              meta={`${item.minutes} minutes • ${new Date(
+                item.date
+              ).toLocaleDateString()}`}
+              onDelete={() => {
+                setItems(
+                  (all) =>
+                    all.filter(
+                      (entry) =>
+                        entry.id !==
+                        item.id
+                    )
+                );
+
+                onDeleteMinutes(
+                  item.minutes
+                );
+              }}
+            />
+          )
+        )}
+      </WorkspaceList>
     </section>
   );
 }
 
-function GoalsView({ items, setItems, onSave, saveStatus }: {
-  items: GoalItem[]; setItems: Dispatch<SetStateAction<GoalItem[]>>; onSave: () => void; saveStatus: SaveStatus;
+function GoalsView({
+  items,
+  setItems,
+  onSave,
+  saveStatus,
+}: {
+  items: GoalItem[];
+  setItems: Dispatch<
+    SetStateAction<
+      GoalItem[]
+    >
+  >;
+  onSave: () => void;
+  saveStatus: SaveStatus;
 }) {
-  const [title, setTitle] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const add = (event: FormEvent) => { event.preventDefault(); if (!title.trim()) return; setItems((all) => [{ id: crypto.randomUUID(), title: title.trim(), dueDate, completed: false }, ...all]); setTitle(""); setDueDate(""); };
+  const [
+    title,
+    setTitle,
+  ] = useState("");
+
+  const [
+    dueDate,
+    setDueDate,
+  ] = useState("");
+
+  const add = (
+    event: FormEvent
+  ) => {
+    event.preventDefault();
+
+    if (
+      !title.trim()
+    ) {
+      return;
+    }
+
+    setItems(
+      (all) => [
+        {
+          id:
+            crypto.randomUUID(),
+          title:
+            title.trim(),
+          dueDate,
+          completed:
+            false,
+        },
+        ...all,
+      ]
+    );
+
+    setTitle("");
+    setDueDate("");
+  };
+
   return (
     <section className="single-page workspace-page">
-      <WorkspaceHeader title="Goals" text="Set clear preparation targets and mark them complete." onSave={onSave} saveStatus={saveStatus} />
-      <form className="workspace-form panel" onSubmit={add}><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Goal title" required /><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /><button type="submit"><Plus size={16} /> Add Goal</button></form>
-      <WorkspaceList empty="No goals added yet.">{items.map((item) => <div className={`workspace-row ${item.completed ? "complete" : ""}`} key={item.id}><button className="workspace-check" onClick={() => setItems((all) => all.map((goal) => goal.id === item.id ? { ...goal, completed: !goal.completed } : goal))}>{item.completed ? <Check size={14} /> : null}</button><div><b>{item.title}</b><span>{item.dueDate ? `Due ${new Date(`${item.dueDate}T00:00:00`).toLocaleDateString()}` : "No due date"}</span></div><button className="workspace-delete" onClick={() => setItems((all) => all.filter((goal) => goal.id !== item.id))}>Delete</button></div>)}</WorkspaceList>
+      <WorkspaceHeader
+        title="Goals"
+        text="Set clear preparation targets and mark them complete."
+        onSave={
+          onSave
+        }
+        saveStatus={
+          saveStatus
+        }
+      />
+
+      <form
+        className="workspace-form panel"
+        onSubmit={add}
+      >
+        <input
+          value={
+            title
+          }
+          onChange={(
+            event
+          ) =>
+            setTitle(
+              event.target
+                .value
+            )
+          }
+          placeholder="Goal title"
+          required
+        />
+
+        <input
+          type="date"
+          value={
+            dueDate
+          }
+          onChange={(
+            event
+          ) =>
+            setDueDate(
+              event.target
+                .value
+            )
+          }
+        />
+
+        <button
+          type="submit"
+        >
+          <Plus
+            size={16}
+          />
+
+          Add Goal
+        </button>
+      </form>
+
+      <WorkspaceList
+        empty="No goals added yet."
+      >
+        {items.map(
+          (item) => (
+            <div
+              className={`workspace-row ${
+                item.completed
+                  ? "complete"
+                  : ""
+              }`}
+              key={
+                item.id
+              }
+            >
+              <button
+                className="workspace-check"
+                onClick={() =>
+                  setItems(
+                    (all) =>
+                      all.map(
+                        (
+                          goal
+                        ) =>
+                          goal.id ===
+                          item.id
+                            ? {
+                                ...goal,
+                                completed:
+                                  !goal.completed,
+                              }
+                            : goal
+                      )
+                  )
+                }
+              >
+                {item.completed ? (
+                  <Check
+                    size={14}
+                  />
+                ) : null}
+              </button>
+
+              <div>
+                <b>
+                  {item.title}
+                </b>
+
+                <span>
+                  {item.dueDate
+                    ? `Due ${new Date(
+                        `${item.dueDate}T00:00:00`
+                      ).toLocaleDateString()}`
+                    : "No due date"}
+                </span>
+              </div>
+
+              <button
+                className="workspace-delete"
+                onClick={() =>
+                  setItems(
+                    (all) =>
+                      all.filter(
+                        (
+                          goal
+                        ) =>
+                          goal.id !==
+                          item.id
+                      )
+                  )
+                }
+              >
+                Delete
+              </button>
+            </div>
+          )
+        )}
+      </WorkspaceList>
     </section>
   );
 }
 
-function TestsView({ subjects, items, setItems, onSave, saveStatus }: {
-  subjects: SubjectName[]; items: TestItem[]; setItems: Dispatch<SetStateAction<TestItem[]>>; onSave: () => void; saveStatus: SaveStatus;
+function TestsView({
+  subjects,
+  items,
+  setItems,
+  onSave,
+  saveStatus,
+}: {
+  subjects: SubjectName[];
+  items: TestItem[];
+  setItems: Dispatch<
+    SetStateAction<
+      TestItem[]
+    >
+  >;
+  onSave: () => void;
+  saveStatus: SaveStatus;
 }) {
-  const [subject, setSubject] = useState<SubjectName>(subjects[0]); const [score, setScore] = useState(""); const [maxScore, setMaxScore] = useState("100");
-  const add = (event: FormEvent) => { event.preventDefault(); const scored = Number(score); const maximum = Number(maxScore); if (scored < 0 || maximum < 1 || scored > maximum) return; setItems((all) => [{ id: crypto.randomUUID(), subject, score: scored, maxScore: maximum, date: new Date().toISOString() }, ...all]); setScore(""); };
+  const [
+    subject,
+    setSubject,
+  ] = useState<SubjectName>(
+    subjects[0]
+  );
+
+  const [
+    score,
+    setScore,
+  ] = useState("");
+
+  const [
+    maxScore,
+    setMaxScore,
+  ] = useState("100");
+
+  const add = (
+    event: FormEvent
+  ) => {
+    event.preventDefault();
+
+    const scored =
+      Number(score);
+
+    const maximum =
+      Number(maxScore);
+
+    if (
+      scored < 0 ||
+      maximum < 1 ||
+      scored > maximum
+    ) {
+      return;
+    }
+
+    setItems(
+      (all) => [
+        {
+          id:
+            crypto.randomUUID(),
+          subject,
+          score:
+            scored,
+          maxScore:
+            maximum,
+          date:
+            new Date()
+              .toISOString(),
+        },
+        ...all,
+      ]
+    );
+
+    setScore("");
+  };
+
   return (
-    <section className="single-page workspace-page"><WorkspaceHeader title="Test Series" text="Record mock-test scores and monitor improvement." onSave={onSave} saveStatus={saveStatus} />
-      <form className="workspace-form panel" onSubmit={add}><select value={subject} onChange={(e) => setSubject(e.target.value as SubjectName)}>{subjects.map((item) => <option key={item}>{item}</option>)}</select><input type="number" min="0" value={score} onChange={(e) => setScore(e.target.value)} placeholder="Score" required /><input type="number" min="1" value={maxScore} onChange={(e) => setMaxScore(e.target.value)} placeholder="Out of" required /><button type="submit"><Plus size={16} /> Add Result</button></form>
-      <WorkspaceList empty="No test results recorded yet.">{items.map((item) => <WorkspaceRow key={item.id} title={item.subject} meta={`${item.score}/${item.maxScore} • ${Math.round(item.score / item.maxScore * 100)}% • ${new Date(item.date).toLocaleDateString()}`} onDelete={() => setItems((all) => all.filter((entry) => entry.id !== item.id))} />)}</WorkspaceList>
+    <section className="single-page workspace-page">
+      <WorkspaceHeader
+        title="Test Series"
+        text="Record mock-test scores and monitor improvement."
+        onSave={
+          onSave
+        }
+        saveStatus={
+          saveStatus
+        }
+      />
+
+      <form
+        className="workspace-form panel"
+        onSubmit={add}
+      >
+        <select
+          value={
+            subject
+          }
+          onChange={(
+            event
+          ) =>
+            setSubject(
+              event.target
+                .value as SubjectName
+            )
+          }
+        >
+          {subjects.map(
+            (item) => (
+              <option
+                key={
+                  item
+                }
+              >
+                {item}
+              </option>
+            )
+          )}
+        </select>
+
+        <input
+          type="number"
+          min="0"
+          value={
+            score
+          }
+          onChange={(
+            event
+          ) =>
+            setScore(
+              event.target
+                .value
+            )
+          }
+          placeholder="Score"
+          required
+        />
+
+        <input
+          type="number"
+          min="1"
+          value={
+            maxScore
+          }
+          onChange={(
+            event
+          ) =>
+            setMaxScore(
+              event.target
+                .value
+            )
+          }
+          placeholder="Out of"
+          required
+        />
+
+        <button
+          type="submit"
+        >
+          <Plus
+            size={16}
+          />
+
+          Add Result
+        </button>
+      </form>
+
+      <WorkspaceList
+        empty="No test results recorded yet."
+      >
+        {items.map(
+          (item) => (
+            <WorkspaceRow
+              key={
+                item.id
+              }
+              title={
+                item.subject
+              }
+              meta={`${item.score}/${item.maxScore} • ${Math.round(
+                (
+                  item.score /
+                  item.maxScore
+                ) *
+                  100
+              )}% • ${new Date(
+                item.date
+              ).toLocaleDateString()}`}
+              onDelete={() =>
+                setItems(
+                  (all) =>
+                    all.filter(
+                      (entry) =>
+                        entry.id !==
+                        item.id
+                    )
+                )
+              }
+            />
+          )
+        )}
+      </WorkspaceList>
     </section>
   );
 }
 
-function CalendarView({ items, setItems, onSave, saveStatus }: { items: CalendarItem[]; setItems: Dispatch<SetStateAction<CalendarItem[]>>; onSave: () => void; saveStatus: SaveStatus; }) {
-  const [title, setTitle] = useState(""); const [date, setDate] = useState("");
-  const add = (event: FormEvent) => { event.preventDefault(); if (!title.trim() || !date) return; setItems((all) => [...all, { id: crypto.randomUUID(), title: title.trim(), date }].sort((a, b) => a.date.localeCompare(b.date))); setTitle(""); setDate(""); };
-  return <section className="single-page workspace-page"><WorkspaceHeader title="Calendar" text="Schedule tests, revision days and study deadlines." onSave={onSave} saveStatus={saveStatus} /><form className="workspace-form panel" onSubmit={add}><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Event title" required /><input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /><button type="submit"><Plus size={16} /> Add Event</button></form><WorkspaceList empty="No calendar events yet.">{items.map((item) => <WorkspaceRow key={item.id} title={item.title} meta={new Date(`${item.date}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })} onDelete={() => setItems((all) => all.filter((entry) => entry.id !== item.id))} />)}</WorkspaceList></section>;
+function CalendarView({
+  items,
+  setItems,
+  onSave,
+  saveStatus,
+}: {
+  items: CalendarItem[];
+  setItems: Dispatch<
+    SetStateAction<
+      CalendarItem[]
+    >
+  >;
+  onSave: () => void;
+  saveStatus: SaveStatus;
+}) {
+  const [
+    title,
+    setTitle,
+  ] = useState("");
+
+  const [
+    date,
+    setDate,
+  ] = useState("");
+
+  const add = (
+    event: FormEvent
+  ) => {
+    event.preventDefault();
+
+    if (
+      !title.trim() ||
+      !date
+    ) {
+      return;
+    }
+
+    setItems(
+      (all) =>
+        [
+          ...all,
+          {
+            id:
+              crypto.randomUUID(),
+            title:
+              title.trim(),
+            date,
+          },
+        ].sort(
+          (a, b) =>
+            a.date.localeCompare(
+              b.date
+            )
+        )
+    );
+
+    setTitle("");
+    setDate("");
+  };
+
+  return (
+    <section className="single-page workspace-page">
+      <WorkspaceHeader
+        title="Calendar"
+        text="Schedule tests, revision days and study deadlines."
+        onSave={
+          onSave
+        }
+        saveStatus={
+          saveStatus
+        }
+      />
+
+      <form
+        className="workspace-form panel"
+        onSubmit={add}
+      >
+        <input
+          value={
+            title
+          }
+          onChange={(
+            event
+          ) =>
+            setTitle(
+              event.target
+                .value
+            )
+          }
+          placeholder="Event title"
+          required
+        />
+
+        <input
+          type="date"
+          value={
+            date
+          }
+          onChange={(
+            event
+          ) =>
+            setDate(
+              event.target
+                .value
+            )
+          }
+          required
+        />
+
+        <button
+          type="submit"
+        >
+          <Plus
+            size={16}
+          />
+
+          Add Event
+        </button>
+      </form>
+
+      <WorkspaceList
+        empty="No calendar events yet."
+      >
+        {items.map(
+          (item) => (
+            <WorkspaceRow
+              key={
+                item.id
+              }
+              title={
+                item.title
+              }
+              meta={
+                new Date(
+                  `${item.date}T00:00:00`
+                ).toLocaleDateString(
+                  undefined,
+                  {
+                    day:
+                      "numeric",
+                    month:
+                      "long",
+                    year:
+                      "numeric",
+                  }
+                )
+              }
+              onDelete={() =>
+                setItems(
+                  (all) =>
+                    all.filter(
+                      (entry) =>
+                        entry.id !==
+                        item.id
+                    )
+                )
+              }
+            />
+          )
+        )}
+      </WorkspaceList>
+    </section>
+  );
 }
 
-function NotesView({ items, setItems, onSave, saveStatus }: { items: NoteItem[]; setItems: Dispatch<SetStateAction<NoteItem[]>>; onSave: () => void; saveStatus: SaveStatus; }) {
-  const [title, setTitle] = useState(""); const [body, setBody] = useState("");
-  const add = (event: FormEvent) => { event.preventDefault(); if (!title.trim() || !body.trim()) return; setItems((all) => [{ id: crypto.randomUUID(), title: title.trim(), body: body.trim(), updatedAt: new Date().toISOString() }, ...all]); setTitle(""); setBody(""); };
-  return <section className="single-page workspace-page"><WorkspaceHeader title="Notes" text="Keep concise preparation notes synced to your account." onSave={onSave} saveStatus={saveStatus} /><form className="workspace-form notes-form panel" onSubmit={add}><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Note title" required /><textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write your note..." required /><button type="submit"><Plus size={16} /> Add Note</button></form><div className="notes-grid">{items.length ? items.map((item) => <article className="note-card panel" key={item.id}><h3>{item.title}</h3><p>{item.body}</p><footer><span>{new Date(item.updatedAt).toLocaleDateString()}</span><button onClick={() => setItems((all) => all.filter((entry) => entry.id !== item.id))}>Delete</button></footer></article>) : <div className="workspace-empty panel">No notes created yet.</div>}</div></section>;
+function NotesView({
+  items,
+  setItems,
+  onSave,
+  saveStatus,
+}: {
+  items: NoteItem[];
+  setItems: Dispatch<
+    SetStateAction<
+      NoteItem[]
+    >
+  >;
+  onSave: () => void;
+  saveStatus: SaveStatus;
+}) {
+  const [
+    title,
+    setTitle,
+  ] = useState("");
+
+  const [
+    body,
+    setBody,
+  ] = useState("");
+
+  const add = (
+    event: FormEvent
+  ) => {
+    event.preventDefault();
+
+    if (
+      !title.trim() ||
+      !body.trim()
+    ) {
+      return;
+    }
+
+    setItems(
+      (all) => [
+        {
+          id:
+            crypto.randomUUID(),
+          title:
+            title.trim(),
+          body:
+            body.trim(),
+          updatedAt:
+            new Date()
+              .toISOString(),
+        },
+        ...all,
+      ]
+    );
+
+    setTitle("");
+    setBody("");
+  };
+
+  return (
+    <section className="single-page workspace-page">
+      <WorkspaceHeader
+        title="Notes"
+        text="Keep concise preparation notes synced to your account."
+        onSave={
+          onSave
+        }
+        saveStatus={
+          saveStatus
+        }
+      />
+
+      <form
+        className="workspace-form notes-form panel"
+        onSubmit={add}
+      >
+        <input
+          value={
+            title
+          }
+          onChange={(
+            event
+          ) =>
+            setTitle(
+              event.target
+                .value
+            )
+          }
+          placeholder="Note title"
+          required
+        />
+
+        <textarea
+          value={
+            body
+          }
+          onChange={(
+            event
+          ) =>
+            setBody(
+              event.target
+                .value
+            )
+          }
+          placeholder="Write your note..."
+          required
+        />
+
+        <button
+          type="submit"
+        >
+          <Plus
+            size={16}
+          />
+
+          Add Note
+        </button>
+      </form>
+
+      <div className="notes-grid">
+        {items.length ? (
+          items.map(
+            (item) => (
+              <article
+                className="note-card panel"
+                key={
+                  item.id
+                }
+              >
+                <h3>
+                  {item.title}
+                </h3>
+
+                <p>
+                  {item.body}
+                </p>
+
+                <footer>
+                  <span>
+                    {new Date(
+                      item.updatedAt
+                    ).toLocaleDateString()}
+                  </span>
+
+                  <button
+                    onClick={() =>
+                      setItems(
+                        (all) =>
+                          all.filter(
+                            (
+                              entry
+                            ) =>
+                              entry.id !==
+                              item.id
+                          )
+                      )
+                    }
+                  >
+                    Delete
+                  </button>
+                </footer>
+              </article>
+            )
+          )
+        ) : (
+          <div className="workspace-empty panel">
+            No notes created yet.
+          </div>
+        )}
+      </div>
+    </section>
+  );
 }
 
-function WorkspaceList({ children, empty }: { children: ReactNode; empty: string }) {
-  const hasItems = Array.isArray(children) ? children.length > 0 : Boolean(children);
-  return <section className="workspace-list panel">{hasItems ? children : <div className="workspace-empty">{empty}</div>}</section>;
+function WorkspaceList({
+  children,
+  empty,
+}: {
+  children: ReactNode;
+  empty: string;
+}) {
+  const hasItems =
+    Array.isArray(
+      children
+    )
+      ? children.length > 0
+      : Boolean(
+          children
+        );
+
+  return (
+    <section className="workspace-list panel">
+      {hasItems ? (
+        children
+      ) : (
+        <div className="workspace-empty">
+          {empty}
+        </div>
+      )}
+    </section>
+  );
 }
 
-function WorkspaceRow({ title, meta, onDelete }: { title: string; meta: string; onDelete: () => void }) {
-  return <div className="workspace-row"><div><b>{title}</b><span>{meta}</span></div><button className="workspace-delete" onClick={onDelete}>Delete</button></div>;
+function WorkspaceRow({
+  title,
+  meta,
+  onDelete,
+}: {
+  title: string;
+  meta: string;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="workspace-row">
+      <div>
+        <b>
+          {title}
+        </b>
+
+        <span>
+          {meta}
+        </span>
+      </div>
+
+      <button
+        className="workspace-delete"
+        onClick={onDelete}
+      >
+        Delete
+      </button>
+    </div>
+  );
 }
 
 /* =========================================================
@@ -2502,47 +3875,6 @@ function SettingsView({
           Logout
         </button>
       </section>
-    </section>
-  );
-}
-
-/* =========================================================
-   COMING SOON
-========================================================= */
-
-function ComingSoon({
-  view,
-  onDashboard,
-}: {
-  view: View;
-  onDashboard: () => void;
-}) {
-  return (
-    <section className="coming-soon panel">
-      <div className="coming-icon">
-        <Plus
-          size={24}
-        />
-      </div>
-
-      <h2>
-        {view}
-      </h2>
-
-      <p>
-        This section is ready for
-        the next build phase.
-        The dashboard and chapter
-        tracker are already functional.
-      </p>
-
-      <button
-        onClick={
-          onDashboard
-        }
-      >
-        Back to Dashboard
-      </button>
     </section>
   );
 }
@@ -2870,386 +4202,28 @@ function MiniLine({
     </div>
   );
 }
-
-/* =========================================================
-   AUTH STYLES
-========================================================= */
-
-function AuthStyles() {
-  return (
-    <style>{`
-      .auth-page {
-        min-height: 100vh;
-        display: grid;
-        grid-template-columns: 1.05fr 0.95fr;
-        background: #f7f8fb;
-        font-family: Arial, sans-serif;
-      }
-
-      .auth-left {
-        min-height: 100vh;
-        padding: 42px 8vw;
-        background:
-          radial-gradient(
-            circle at 20% 20%,
-            rgba(92, 116, 215, 0.15),
-            transparent 30%
-          ),
-          linear-gradient(
-            135deg,
-            #101a31,
-            #17274b
-          );
-        color: white;
-        display: flex;
-        flex-direction: column;
-      }
-
-      .auth-brand {
-        display: flex;
-        align-items: center;
-        gap: 11px;
-        font-size: 13px;
-        letter-spacing: 2px;
-        font-weight: 700;
-      }
-
-      .auth-logo {
-        width: 42px;
-        height: 42px;
-        display: grid;
-        place-items: center;
-        border-radius: 12px;
-        background: #ffffff;
-        color: #1b3d83;
-        font-size: 17px;
-        font-weight: 800;
-        letter-spacing: -1px;
-      }
-
-      .auth-hero {
-        margin: auto 0;
-        max-width: 570px;
-      }
-
-      .auth-badge {
-        display: inline-flex;
-        padding: 8px 12px;
-        border: 1px solid rgba(255,255,255,.16);
-        background: rgba(255,255,255,.07);
-        border-radius: 999px;
-        font-size: 11px;
-        letter-spacing: 1.3px;
-        margin-bottom: 26px;
-      }
-
-      .auth-hero h1 {
-        margin: 0;
-        font-size: clamp(42px, 5vw, 72px);
-        line-height: 1.02;
-        letter-spacing: -3px;
-      }
-
-      .auth-hero h1 span {
-        color: #9fb9ff;
-      }
-
-      .auth-hero > p {
-        max-width: 480px;
-        margin: 24px 0 38px;
-        color: #b7c1d7;
-        line-height: 1.7;
-        font-size: 16px;
-      }
-
-      .auth-features {
-        display: grid;
-        gap: 17px;
-      }
-
-      .auth-feature {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-      }
-
-      .auth-feature-icon {
-        width: 40px;
-        height: 40px;
-        display: grid;
-        place-items: center;
-        background: rgba(255,255,255,.08);
-        border: 1px solid rgba(255,255,255,.1);
-        border-radius: 11px;
-        color: #a9c0ff;
-      }
-
-      .auth-feature strong,
-      .auth-feature span {
-        display: block;
-      }
-
-      .auth-feature strong {
-        font-size: 14px;
-        margin-bottom: 3px;
-      }
-
-      .auth-feature span {
-        color: #aab6cf;
-        font-size: 13px;
-      }
-
-      .auth-footer {
-        color: #7584a3;
-        font-size: 12px;
-      }
-
-      .auth-right {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 32px;
-      }
-
-      .auth-card {
+      .auth-google {
         width: 100%;
-        max-width: 430px;
+        height: 50px;
+        border: 1px solid #dfe3eb;
+        border-radius: 11px;
         background: white;
-        border: 1px solid #e8ebf1;
-        border-radius: 22px;
-        padding: 42px;
-        box-shadow: 0 20px 70px rgba(25, 38, 68, .08);
-      }
-
-      .auth-card-head h2 {
-        margin: 0;
-        color: #182033;
-        font-size: 30px;
-        letter-spacing: -1px;
-      }
-
-      .auth-card-head p {
-        margin: 9px 0 30px;
-        color: #7c8595;
-        line-height: 1.6;
+        color: #293244;
+        cursor: pointer;
         font-size: 14px;
-      }
-
-      .auth-form {
-        display: grid;
-        gap: 17px;
-      }
-
-      .auth-form label {
-        display: grid;
-        gap: 8px;
-        color: #4d5564;
-        font-size: 13px;
         font-weight: 600;
       }
 
-      .auth-form input {
-        width: 100%;
-        box-sizing: border-box;
-        height: 48px;
-        border: 1px solid #dfe3eb;
-        border-radius: 11px;
-        padding: 0 14px;
-        outline: none;
-        font-size: 14px;
-        transition: .2s;
+      .auth-google:hover {
+        background: #f8f9fb;
       }
 
-      .auth-form input:focus {
-        border-color: #2d68cf;
-        box-shadow: 0 0 0 4px rgba(45,104,207,.08);
-      }
-
-      .auth-submit {
-        height: 50px;
-        border: 0;
-        border-radius: 11px;
-        background: #245ec2;
-        color: white;
-        font-weight: 700;
-        font-size: 14px;
-        cursor: pointer;
-        margin-top: 4px;
-      }
-
-      .auth-submit:hover {
-        background: #1d51aa;
-      }
-
-      .auth-submit:disabled {
-        opacity: .65;
-        cursor: not-allowed;
-      }
-
-      .auth-switch {
-        margin-top: 25px;
+      .auth-divider {
         text-align: center;
-        color: #778092;
-        font-size: 13px;
-      }
-
-      .auth-switch button {
-        border: 0;
-        background: none;
-        color: #245ec2;
-        font-weight: 700;
-        margin-left: 6px;
-        cursor: pointer;
-      }
-
-      .auth-guest {
-        width: 100%;
-        height: 46px;
-        margin-top: 18px;
-        border: 1px solid #d9e1ef;
-        border-radius: 11px;
-        background: #f7f9fd;
-        color: #245ec2;
-        font-size: 13px;
-        font-weight: 700;
-        cursor: pointer;
-      }
-
-      .auth-guest:hover {
-        background: #eef3fb;
-      }
-
-      .auth-guest-note {
-        margin: 10px 10px 0;
-        color: #8891a1;
-        font-size: 11px;
-        line-height: 1.5;
-        text-align: center;
-      }
-
-      .auth-error,
-      .auth-success,
-      .auth-config-warning {
-        padding: 11px 13px;
-        border-radius: 9px;
+        margin: 20px 0;
+        color: #98a0ae;
         font-size: 12px;
-        line-height: 1.5;
       }
-
-      .auth-error {
-        background: #fff1f1;
-        color: #b3261e;
-        border: 1px solid #ffd7d5;
-      }
-
-      .auth-success {
-        background: #effaf3;
-        color: #18703b;
-        border: 1px solid #ccebd6;
-      }
-
-      .auth-config-warning {
-        margin-top: 20px;
-        background: #fff8e8;
-        color: #8a6316;
-      }
-
-      .logout-button {
-        color: #d44b4b;
-      }
-
-      .settings-account {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        padding: 24px;
-      }
-
-      .settings-account h3 {
-        margin: 0 0 5px;
-      }
-
-      .settings-account p {
-        margin: 0;
-        color: #7a8290;
-      }
-
-      .settings-avatar {
-        width: 50px;
-        height: 50px;
-        display: grid;
-        place-items: center;
-        border-radius: 50%;
-        background: #e9efff;
-        color: #245ec2;
-        font-weight: 800;
-      }
-
-      .settings-logout {
-        margin-left: auto;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        border: 1px solid #f1d6d6;
-        background: #fff;
-        color: #c94a4a;
-        padding: 10px 14px;
-        border-radius: 9px;
-        cursor: pointer;
-      }
-
-      @media (max-width: 850px) {
-        .auth-page {
-          grid-template-columns: 1fr;
-        }
-
-        .auth-left {
-          min-height: auto;
-          padding: 32px 24px 50px;
-        }
-
-        .auth-hero {
-          margin: 65px 0 0;
-        }
-
-        .auth-hero h1 {
-          font-size: 48px;
-        }
-
-        .auth-footer {
-          display: none;
-        }
-
-        .auth-right {
-          padding: 28px 18px 40px;
-        }
-
-        .auth-card {
-          padding: 30px 22px;
-        }
-      }
-      .auth-google {
-  width: 100%;
-  height: 50px;
-  border: 1px solid #dfe3eb;
-  border-radius: 11px;
-  background: white;
-  color: #293244;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.auth-google:hover {
-  background: #f8f9fb;
-}
-
-.auth-divider {
-  text-align: center;
-  margin: 20px 0;
-  color: #98a0ae;
-  font-size: 12px;
-}
     `}</style>
   );
 }
