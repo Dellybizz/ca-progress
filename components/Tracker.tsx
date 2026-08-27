@@ -2,7 +2,6 @@
 
 import {
   FormEvent,
-  CSSProperties,
   Dispatch,
   ReactNode,
   SetStateAction,
@@ -22,7 +21,6 @@ import {
   ChevronRight,
   ClipboardCheck,
   Clock3,
-  Crown,
   FileText,
   Flame,
   Goal,
@@ -30,7 +28,6 @@ import {
   LineChart,
   LogIn,
   LogOut,
-  Lock,
   Menu,
   MessageCircle,
   NotebookPen,
@@ -38,7 +35,6 @@ import {
   Save,
   Search,
   Settings,
-  Shield,
   Target,
   Trophy,
 } from "lucide-react";
@@ -46,16 +42,12 @@ import {
 import CommunityChat from "@/components/CommunityChat";
 
 import {
-  CourseGroup,
-  CourseLevel,
-  getSubjectsForSelection,
   syllabus,
   SubjectName,
 } from "@/lib/syllabus";
 
 import {
   ActivityItem,
-  AppPageElement,
   CalendarItem,
   GoalItem,
   NoteItem,
@@ -213,7 +205,6 @@ const publicViews: View[] = [
   "Dashboard",
   "Subjects",
   "Chapters",
-  "Settings",
 ];
 
 const viewRoutes: Record<
@@ -234,21 +225,6 @@ const viewRoutes: Record<
   Settings: "/settings",
 };
 
-const viewSectionKeys: Record<View, string> = {
-  Dashboard: "dashboard",
-  Community: "community",
-  Subjects: "subjects",
-  Chapters: "chapters",
-  Analytics: "analytics",
-  "Study Sessions": "study-sessions",
-  Goals: "goals",
-  "Test Series": "test-series",
-  Calendar: "calendar",
-  Activity: "activity",
-  Notes: "notes",
-  Settings: "settings",
-};
-
 const subjectMeta: Record<
   SubjectName,
   {
@@ -257,30 +233,6 @@ const subjectMeta: Record<
     short: string;
   }
 > = {
-  Accounting: {
-    code: "AC",
-    color: "#4263c7",
-    short: "Accounting",
-  },
-
-  "Business Laws": {
-    code: "BL",
-    color: "#c94f7c",
-    short: "Business Laws",
-  },
-
-  "Quantitative Aptitude": {
-    code: "QA",
-    color: "#6b5dcc",
-    short: "Quantitative Aptitude",
-  },
-
-  "Business Economics": {
-    code: "BE",
-    color: "#3d9a82",
-    short: "Business Economics",
-  },
-
   "Advanced Accounting": {
     code: "AA",
     color: "#5b6fd6",
@@ -315,42 +267,6 @@ const subjectMeta: Record<
     code: "FM",
     color: "#2f78bd",
     short: "Financial Management",
-  },
-
-  "Financial Reporting": {
-    code: "FR",
-    color: "#5368d4",
-    short: "Financial Reporting",
-  },
-
-  "Advanced Financial Management": {
-    code: "AF",
-    color: "#327fbc",
-    short: "Advanced Financial Management",
-  },
-
-  "Advanced Auditing, Assurance and Professional Ethics": {
-    code: "AU",
-    color: "#3d9b8c",
-    short: "Advanced Audit & Ethics",
-  },
-
-  "Direct Tax Laws & International Taxation": {
-    code: "DT",
-    color: "#e08a35",
-    short: "Direct Tax & International Tax",
-  },
-
-  "Indirect Tax Laws": {
-    code: "IT",
-    color: "#d55b78",
-    short: "Indirect Tax Laws",
-  },
-
-  "Integrated Business Solutions": {
-    code: "IB",
-    color: "#7659c6",
-    short: "Integrated Business Solutions",
   },
 };
 
@@ -390,8 +306,8 @@ export default function Tracker({
     authLoading,
     guestMode,
     configured,
-    sendPhoneOtp,
-    verifyPhoneOtp,
+    signIn,
+    signUp,
     signInWithGoogle,
     signOut,
     continueAsGuest,
@@ -399,19 +315,21 @@ export default function Tracker({
   } = useProgress();
 
   const [
-    phone,
-    setPhone,
+    authMode,
+    setAuthMode,
+  ] = useState<AuthMode>(
+    authPage || "login"
+  );
+
+  const [
+    email,
+    setEmail,
   ] = useState("");
 
   const [
-    phoneOtp,
-    setPhoneOtp,
+    password,
+    setPassword,
   ] = useState("");
-
-  const [
-    phoneOtpSent,
-    setPhoneOtpSent,
-  ] = useState(false);
 
   const [
     authError,
@@ -429,31 +347,38 @@ export default function Tracker({
   ] = useState(false);
 
   const [
-    rememberOnDevice,
-    setRememberOnDevice,
-  ] = useState(true);
-
-  const [
     showLoginPrompt,
     setShowLoginPrompt,
   ] = useState(false);
-  const [showLogoutPrompt,setShowLogoutPrompt]=useState(false);
+
+  useEffect(() => {
+    if (authPage) {
+      setAuthMode(authPage);
+    }
+  }, [authPage]);
 
   useEffect(() => {
     if (authLoading) return;
 
     if (session && authPage) {
       router.replace("/dashboard");
+    } else if (
+      !session &&
+      !guestMode &&
+      !authPage
+    ) {
+      router.replace("/login");
     }
   }, [
     authLoading,
     authPage,
+    guestMode,
     router,
     session,
   ]);
 
   /* =======================================================
-     PHONE OTP LOGIN
+     LOGIN / SIGNUP
   ======================================================= */
 
   const handleAuth = async (
@@ -466,43 +391,34 @@ export default function Tracker({
     setSubmitting(true);
 
     try {
-      const digits = phone.replace(/\D/g, "");
-
-      if (digits.length < 10) {
-        setAuthError(
-          "Enter a valid mobile number with country code."
-        );
-        return;
-      }
-
-      const normalizedPhone =
-        digits.length === 10
-          ? `+91${digits}`
-          : phone.trim().startsWith("+")
-          ? `+${digits}`
-          : `+${digits}`;
-
-      if (!phoneOtpSent) {
-        const error = await sendPhoneOtp(
-          normalizedPhone,
-          rememberOnDevice
-        );
-
-        if (error) setAuthError(error);
-        else {
-          setPhoneOtpSent(true);
-          setAuthMessage(
-            `Verification code sent to ${normalizedPhone}.`
+      if (authMode === "login") {
+        const error =
+          await signIn(
+            email,
+            password
           );
+
+        if (error) {
+          setAuthError(error);
         }
       } else {
-        const error = await verifyPhoneOtp(
-          normalizedPhone,
-          phoneOtp.trim(),
-          rememberOnDevice
-        );
+        const result =
+          await signUp(
+            email,
+            password
+          );
 
-        if (error) setAuthError(error);
+        if (result.error) {
+          setAuthError(
+            result.error
+          );
+        } else if (
+          result.needsConfirmation
+        ) {
+          setAuthMessage(
+            "Account created. Please check your email to confirm your account."
+          );
+        }
       }
     } catch {
       setAuthError(
@@ -521,9 +437,7 @@ export default function Tracker({
 
       try {
         const error =
-          await signInWithGoogle(
-            rememberOnDevice
-          );
+          await signInWithGoogle();
 
         if (error) {
           setAuthError(error);
@@ -542,12 +456,10 @@ export default function Tracker({
      LOGOUT
   ======================================================= */
 
-  const handleLogout = () => setShowLogoutPrompt(true);
-  const confirmLogout = async () => {
-    await signOut();
-    setShowLogoutPrompt(false);
-    router.push("/dashboard");
-  };
+  const handleLogout =
+    async () => {
+      await signOut();
+    };
 
   /* =======================================================
      LOADING
@@ -615,7 +527,10 @@ export default function Tracker({
 
   if (
     !session &&
-    Boolean(authPage)
+    (
+      !guestMode ||
+      Boolean(authPage)
+    )
   ) {
     return (
       <>
@@ -633,7 +548,7 @@ export default function Tracker({
 
             <div className="auth-hero">
               <div className="auth-badge">
-                ALL CA LEVELS
+                CA INTERMEDIATE
               </div>
 
               <h1>
@@ -695,29 +610,17 @@ export default function Tracker({
           <div className="auth-right">
             <div className="auth-card">
               <div className="auth-card-head">
-                <div className="auth-mobile-logo">
-                  CA
-                </div>
-
-                <h2>Welcome to CA Progress</h2>
+                <h2>
+                  {authMode === "login"
+                    ? "Welcome back"
+                    : "Create your account"}
+                </h2>
 
                 <p>
-                  Sign in or create an account securely with Google or your phone number.
+                  {authMode === "login"
+                    ? "Sign in to continue your preparation."
+                    : "Start tracking your CA preparation today."}
                 </p>
-              </div>
-
-              <button
-                type="button"
-                className="auth-google"
-                onClick={handleGoogleSignIn}
-                disabled={submitting}
-              >
-                <span className="google-mark">G</span>
-                Continue with Google
-              </button>
-
-              <div className="auth-divider auth-method-divider">
-                <span>or use your phone number</span>
               </div>
 
               <form
@@ -725,70 +628,36 @@ export default function Tracker({
                 className="auth-form"
               >
                 <label>
-                  Mobile number
+                  Email address
 
                   <input
-                    type="tel"
-                    inputMode="tel"
-                    autoComplete="tel"
-                    placeholder="+91 98765 43210"
-                    value={phone}
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
                     onChange={(event) =>
-                      setPhone(
+                      setEmail(
                         event.target.value
                       )
                     }
-                    disabled={phoneOtpSent}
                     required
                   />
                 </label>
 
-                {phoneOtpSent && (
-                  <label>
-                    Verification code
+                <label>
+                  Password
 
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      placeholder="Enter 6-digit code"
-                      value={phoneOtp}
-                      onChange={(event) =>
-                        setPhoneOtp(
-                          event.target.value.replace(
-                            /\D/g,
-                            ""
-                          ).slice(0, 6)
-                        )
-                      }
-                      minLength={6}
-                      maxLength={6}
-                      required
-                      autoFocus
-                    />
-                  </label>
-                )}
-
-                <label className="auth-remember">
                   <input
-                    type="checkbox"
-                    checked={rememberOnDevice}
+                    type="password"
+                    placeholder="Enter your password"
+                    value={password}
                     onChange={(event) =>
-                      setRememberOnDevice(
-                        event.target.checked
+                      setPassword(
+                        event.target.value
                       )
                     }
+                    minLength={6}
+                    required
                   />
-
-                  <span>
-                    <strong>
-                      Remember on this device
-                    </strong>
-
-                    <small>
-                      Stay signed in after closing your browser.
-                    </small>
-                  </span>
                 </label>
 
                 {authError && (
@@ -810,26 +679,62 @@ export default function Tracker({
                 >
                   {submitting
                     ? "Please wait..."
-                    : phoneOtpSent
-                    ? "Verify and continue"
-                    : "Send verification code"}
+                    : authMode === "login"
+                    ? "Sign in"
+                    : "Create account"}
                 </button>
 
-                {phoneOtpSent && (
-                  <button
-                    type="button"
-                    className="auth-change-phone"
-                    onClick={() => {
-                      setPhoneOtpSent(false);
-                      setPhoneOtp("");
-                      setAuthError("");
-                      setAuthMessage("");
-                    }}
-                  >
-                    Change phone number
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="auth-google"
+                  onClick={
+                    handleGoogleSignIn
+                  }
+                  disabled={submitting}
+                >
+                  Continue with Google
+                </button>
+
+                <div className="auth-divider">
+                  <span>
+                    or continue with email
+                  </span>
+                </div>
               </form>
+
+              <div className="auth-switch">
+                {authMode === "login"
+                  ? "Don't have an account?"
+                  : "Already have an account?"}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextMode =
+                      authMode === "login"
+                        ? "signup"
+                        : "login";
+
+                    setAuthMode(
+                      nextMode
+                    );
+
+                    router.push(
+                      nextMode ===
+                        "signup"
+                        ? "/signup"
+                        : "/login"
+                    );
+
+                    setAuthError("");
+                    setAuthMessage("");
+                  }}
+                >
+                  {authMode === "login"
+                    ? "Create one"
+                    : "Sign in"}
+                </button>
+              </div>
 
               <button
                 type="button"
@@ -879,9 +784,7 @@ export default function Tracker({
       <TrackerDashboard
         initialView={initialView}
         email={
-          session?.user.email ||
-          session?.user.phone ||
-          ""
+          session?.user.email || ""
         }
         userId={
           session?.user.id || null
@@ -973,7 +876,6 @@ export default function Tracker({
           </section>
         </div>
       )}
-      {showLogoutPrompt&&<div className="login-prompt-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)setShowLogoutPrompt(false)}}><section className="login-prompt logout-confirm" role="dialog" aria-modal="true" aria-labelledby="logout-confirm-title"><div className="login-prompt-icon"><LogOut size={24}/></div><h2 id="logout-confirm-title">Would you like to logout?</h2><p>Your saved progress will remain securely connected to your account.</p><div className="login-prompt-actions"><button className="logout-confirm-button" onClick={()=>void confirmLogout()}>Logout</button><button className="login-prompt-secondary" onClick={()=>setShowLogoutPrompt(false)}>Cancel</button></div></section></div>}
     </>
   );
 }
@@ -1047,76 +949,14 @@ function TrackerDashboard({
     notes,
     setNotes,
     saveStatus,
-    planRank,
-    planSlug,
-    isAdmin,
-    sectionRules,
-    pageElements,
     saveProgress:
       saveStoredProgress,
   } = useProgress();
 
-  const [
-    courseLevel,
-    setCourseLevel,
-  ] = useState<CourseLevel>(() => {
-    if (typeof window === "undefined") {
-      return "Intermediate";
-    }
-
-    const saved = window.localStorage.getItem(
-      "ca-progress-course-level"
-    ) as CourseLevel | null;
-
-    return saved &&
-      ["Foundation", "Intermediate", "Final"].includes(saved)
-      ? saved
-      : "Intermediate";
-  });
-
-  const [
-    courseGroup,
-    setCourseGroup,
-  ] = useState<CourseGroup>(() => {
-    if (typeof window === "undefined") {
-      return "Both";
-    }
-
-    const saved = window.localStorage.getItem(
-      "ca-progress-course-group"
-    ) as CourseGroup | null;
-
-    return saved &&
-      ["Group 1", "Group 2", "Both"].includes(saved)
-      ? saved
-      : "Both";
-  });
-
-  const [onboardingLevel, setOnboardingLevel] =
-    useState<CourseLevel>(courseLevel);
-  const [onboardingGroup, setOnboardingGroup] =
-    useState<CourseGroup>(courseGroup);
-  const [showCourseOnboarding, setShowCourseOnboarding] =
-    useState(false);
-
-  useEffect(() => {
-    if (
-      !window.localStorage.getItem(
-        "ca-progress-course-onboarding-complete"
-      )
-    ) {
-      setShowCourseOnboarding(true);
-    }
-  }, []);
-
-  const subjects = useMemo(
-    () =>
-      getSubjectsForSelection(
-        courseLevel,
-        courseGroup
-      ),
-    [courseGroup, courseLevel]
-  );
+  const subjects =
+    Object.keys(
+      syllabus
+    ) as SubjectName[];
 
   const allRows = useMemo(
     () =>
@@ -1244,42 +1084,6 @@ function TrackerDashboard({
     setSearch,
   ] = useState("");
 
-  const applyCourseSelection = (
-    nextLevel: CourseLevel,
-    nextGroup: CourseGroup
-  ) => {
-    const resolvedGroup =
-      nextLevel === "Foundation"
-        ? "Both"
-        : nextGroup;
-
-    const nextSubjects =
-      getSubjectsForSelection(
-        nextLevel,
-        resolvedGroup
-      );
-
-    setCourseLevel(nextLevel);
-    setCourseGroup(resolvedGroup);
-    setActiveSubject(nextSubjects[0]);
-    setSearch("");
-
-    window.localStorage.setItem(
-      "ca-progress-course-level",
-      nextLevel
-    );
-
-    window.localStorage.setItem(
-      "ca-progress-course-group",
-      resolvedGroup
-    );
-
-    window.localStorage.setItem(
-      "ca-progress-subject",
-      nextSubjects[0]
-    );
-  };
-
   const [
     sidebarOpen,
     setSidebarOpen,
@@ -1289,49 +1093,6 @@ function TrackerDashboard({
     toast,
     setToast,
   ] = useState("");
-
-  const [upgradeFeature, setUpgradeFeature] = useState("");
-
-  const ruleFor = (label: View) =>
-    sectionRules.find(
-      (rule) => rule.section_key === viewSectionKeys[label]
-    );
-
-  const ruleIsVisible = (label: View) => {
-    const rule = ruleFor(label);
-    if (!rule || isAdmin) return true;
-    const now = Date.now();
-    if (!rule.enabled) return false;
-    if (rule.starts_at && new Date(rule.starts_at).getTime() > now) return false;
-    if (rule.ends_at && new Date(rule.ends_at).getTime() < now) return false;
-    if (rule.audience === "guest" && userId) return false;
-    if (rule.audience === "member" && !userId) return false;
-    return true;
-  };
-
-  const visibleMenu = menu
-    .filter((item) => ruleIsVisible(item.label))
-    .sort((a, b) =>
-      (ruleFor(a.label)?.sort_order ?? 999) -
-      (ruleFor(b.label)?.sort_order ?? 999)
-    );
-
-  useEffect(() => {
-    if (!sectionRules.length) return;
-    const rule = ruleFor(view);
-    const planLocked = Boolean(
-      userId &&
-      !isAdmin &&
-      rule &&
-      planRank < rule.minimum_plan_rank
-    );
-
-    if (!ruleIsVisible(view) || planLocked) {
-      if (planLocked) setUpgradeFeature(rule?.label || view);
-      setView("Dashboard");
-      router.replace(viewRoutes.Dashboard);
-    }
-  }, [isAdmin, planRank, router, sectionRules, userId, view]);
 
   const firstName =
     email
@@ -1554,20 +1315,6 @@ function TrackerDashboard({
   const nav = (
     label: View
   ) => {
-    const rule = ruleFor(label);
-    if (!ruleIsVisible(label)) return;
-
-    if (
-      userId &&
-      !isAdmin &&
-      rule &&
-      planRank < rule.minimum_plan_rank
-    ) {
-      setUpgradeFeature(rule.label || label);
-      setSidebarOpen(false);
-      return;
-    }
-
     if (!userId && !publicViews.includes(label)) {
       onRequireAuth();
       setSidebarOpen(false);
@@ -1583,94 +1330,7 @@ function TrackerDashboard({
   };
 
   return (
-    <main
-      className={`app-shell layout-${String(
-        ruleFor(view)?.appearance?.layout || "standard"
-      )}`}
-      style={{
-        "--blue": String(
-          ruleFor(view)?.appearance?.accentColor || "#2d68cf"
-        ),
-      } as CSSProperties}
-    >
-      {showCourseOnboarding && (
-        <div className="course-modal-backdrop">
-          <section
-            className="course-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="course-onboarding-title"
-          >
-            <div className="course-modal-head">
-              <span className="course-modal-logo">CA</span>
-
-              <div>
-                <h2 id="course-onboarding-title">Set up your dashboard</h2>
-                <p>Choose your CA level and papers. You can change this later from Settings.</p>
-              </div>
-            </div>
-
-            <div className="course-level-grid">
-              {(["Foundation", "Intermediate", "Final"] as CourseLevel[]).map(
-                (level) => (
-                  <button
-                    type="button"
-                    key={level}
-                    className={onboardingLevel === level ? "course-level-card active" : "course-level-card"}
-                    onClick={() => {
-                      setOnboardingLevel(level);
-                      if (level === "Foundation") setOnboardingGroup("Both");
-                    }}
-                  >
-                    <strong>CA {level}</strong>
-                    <span>{level === "Foundation" ? "4 papers" : "6 papers · 2 groups"}</span>
-                  </button>
-                )
-              )}
-            </div>
-
-            {onboardingLevel !== "Foundation" && (
-              <div className="course-group-section">
-                <label>Select papers</label>
-
-                <div className="course-group-grid">
-                  {(["Group 1", "Group 2", "Both"] as CourseGroup[]).map(
-                    (group) => (
-                      <button
-                        type="button"
-                        key={group}
-                        className={onboardingGroup === group ? "active" : ""}
-                        onClick={() => setOnboardingGroup(group)}
-                      >
-                        <strong>{group}</strong>
-                        <span>{group === "Both" ? "All 6 papers" : "3 papers"}</span>
-                      </button>
-                    )
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div className="course-modal-actions">
-              <button
-                type="button"
-                className="course-apply"
-                onClick={() => {
-                  applyCourseSelection(onboardingLevel, onboardingGroup);
-                  window.localStorage.setItem(
-                    "ca-progress-course-onboarding-complete",
-                    "true"
-                  );
-                  setShowCourseOnboarding(false);
-                }}
-              >
-                Continue to dashboard
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
-
+    <main className="app-shell">
       <aside
         className={`sidebar ${
           sidebarOpen
@@ -1689,7 +1349,7 @@ function TrackerDashboard({
         </div>
 
         <nav>
-          {visibleMenu.map(
+          {menu.map(
             (item) => {
               const Icon =
                 item.icon;
@@ -1716,14 +1376,8 @@ function TrackerDashboard({
                   />
 
                   <span>
-                    {ruleFor(item.label)?.label || item.label}
+                    {item.label}
                   </span>
-
-                  {userId &&
-                    !isAdmin &&
-                    planRank < (ruleFor(item.label)?.minimum_plan_rank || 0) && (
-                      <Lock size={12} className="nav-lock" />
-                    )}
                 </button>
               );
             }
@@ -1744,10 +1398,7 @@ function TrackerDashboard({
             </b>
 
             <small>
-              CA {courseLevel}
-              {courseLevel !== "Foundation"
-                ? ` · ${courseGroup}`
-                : ""}
+              CA Intermediate
             </small>
           </span>
 
@@ -1769,25 +1420,7 @@ function TrackerDashboard({
         />
       )}
 
-      {upgradeFeature && (
-        <div className="login-prompt-backdrop">
-          <section className="login-prompt">
-            <button className="login-prompt-close" onClick={() => setUpgradeFeature("")}>×</button>
-            <div className="login-prompt-icon"><Crown size={23} /></div>
-            <h2>Upgrade required</h2>
-            <p>{upgradeFeature} is not included in your current {planSlug} plan. Contact the administrator or choose an eligible subscription.</p>
-            <button className="login-prompt-primary" onClick={() => setUpgradeFeature("")}>Okay</button>
-          </section>
-        </div>
-      )}
-
-      <section
-        className={`app-content ${
-          view === "Community"
-            ? "community-content"
-            : ""
-        }`}
-      >
+      <section className="app-content">
         <header className="topbar">
           <button
             className="mobile-menu"
@@ -1816,7 +1449,7 @@ function TrackerDashboard({
                 ? "Discipline today, success tomorrow."
                 : view === "Community"
                   ? "Connect, discuss and study together with fellow CA students."
-                  : `Track every step of your CA ${courseLevel} preparation.`}
+                  : "Track every step of your CA Intermediate preparation."}
             </p>
           </div>
 
@@ -1882,8 +1515,6 @@ function TrackerDashboard({
         {view ===
           "Dashboard" && (
           <Dashboard
-            courseLevel={courseLevel}
-            courseGroup={courseGroup}
             subjects={
               subjects
             }
@@ -1900,12 +1531,7 @@ function TrackerDashboard({
               subjectStats
             }
             activities={
-              activities.filter(
-                (item) =>
-                  subjects.includes(
-                    item.subject as SubjectName
-                  )
-              )
+              activities
             }
             studyHours={
               userId
@@ -1930,10 +1556,6 @@ function TrackerDashboard({
             onViewAll={() =>
               nav("Activity")
             }
-            pageElements={pageElements}
-            signedIn={Boolean(userId)}
-            planRank={planRank}
-            isAdmin={isAdmin}
           />
         )}
 
@@ -1943,8 +1565,6 @@ function TrackerDashboard({
             <CommunityChat
               userId={userId}
               email={email}
-              courseLevel={courseLevel}
-              subjects={subjects}
             />
           ) : null
         )}
@@ -2042,12 +1662,7 @@ function TrackerDashboard({
           "Activity" && (
           <ActivityView
             activities={
-              activities.filter(
-                (item) =>
-                  subjects.includes(
-                    item.subject as SubjectName
-                  )
-              )
+              activities
             }
           />
         )}
@@ -2055,10 +1670,7 @@ function TrackerDashboard({
         {view === "Study Sessions" && (
           <StudySessionsView
             subjects={subjects}
-            items={studySessions.filter(
-              (item) =>
-                subjects.includes(item.subject)
-            )}
+            items={studySessions}
             setItems={setStudySessions}
             onAddMinutes={(minutes) =>
               setStudyHours((hours) => [
@@ -2102,10 +1714,7 @@ function TrackerDashboard({
         {view === "Test Series" && (
           <TestsView
             subjects={subjects}
-            items={tests.filter(
-              (item) =>
-                subjects.includes(item.subject)
-            )}
+            items={tests}
             setItems={setTests}
             onSave={saveProgress}
             saveStatus={saveStatus}
@@ -2136,12 +1745,6 @@ function TrackerDashboard({
             email={
               email
             }
-            signedIn={Boolean(userId)}
-            isAdmin={isAdmin}
-            courseLevel={courseLevel}
-            courseGroup={courseGroup}
-            onCourseChange={applyCourseSelection}
-            onSignIn={onRequireAuth}
             onLogout={
               onLogout
             }
@@ -2157,8 +1760,6 @@ function TrackerDashboard({
 ========================================================= */
 
 function Dashboard({
-  courseLevel,
-  courseGroup,
   subjects,
   overall,
   counts,
@@ -2172,35 +1773,21 @@ function Dashboard({
   onQuickGoal,
   onQuickCalendar,
   onViewAll,
-  pageElements,
-  signedIn,
-  planRank,
-  isAdmin,
 }: any) {
   const recent =
     activities.slice(0, 4);
-  const configured=Boolean((pageElements as AppPageElement[]|undefined)?.some(item=>item.page_key==="dashboard"));
-  const element=(key:string)=>((pageElements||[]) as AppPageElement[]).find(item=>item.page_key==="dashboard"&&item.element_key===key);
-  const visible=(key:string)=>{const item=element(key);if(!configured||!item)return true;if(isAdmin)return true;if(!item.enabled)return false;if(item.audience==="guest"&&signedIn)return false;if(item.audience==="member"&&!signedIn)return false;if(signedIn&&planRank<item.minimum_plan_rank)return false;return true};
-  const title=(key:string,fallback:string)=>element(key)?.label||fallback;
-  const elementStyle=(key:string):CSSProperties=>{const item=element(key);return {order:item?.sort_order,background:String(item?.appearance?.backgroundColor||"" )||undefined,color:String(item?.appearance?.textColor||"")||undefined,borderRadius:item?.appearance?.borderRadius?`${Number(item.appearance.borderRadius)}px`:undefined}};
-  const quickActions=((pageElements||[]) as AppPageElement[]).filter(item=>item.page_key==="dashboard"&&item.element_type==="quick_action"&&(!configured||visible(item.element_key))).sort((a,b)=>a.sort_order-b.sort_order);
-  const actionMap:Record<string,()=>void>={"quick-study":onQuickStudy,"quick-test":onQuickTest,"quick-goal":onQuickGoal,"quick-calendar":onQuickCalendar};
 
   return (
     <>
       <div className="dashboard-head">
-        {visible("exam-countdown")&&<div className="exam-card" style={elementStyle("exam-countdown")}>
+        <div className="exam-card">
           <CalendarDays
             size={28}
           />
 
           <div>
             <small>
-              CA {String(courseLevel).toUpperCase()}
-              {courseLevel !== "Foundation"
-                ? ` · ${String(courseGroup).toUpperCase()}`
-                : ""}
+              CA INTERMEDIATE EXAM
             </small>
 
             <div className="countdown">
@@ -2233,9 +1820,9 @@ function Dashboard({
               </b>
             </div>
           </div>
-        </div>}
+        </div>
 
-        {visible("daily-streak")&&<div className="streak-card" style={elementStyle("daily-streak")}>
+        <div className="streak-card">
           <div className="flame">
             <Flame
               size={31}
@@ -2244,7 +1831,7 @@ function Dashboard({
 
           <div>
             <small>
-              {title("daily-streak","Daily Streak")}
+              Daily Streak
             </small>
 
             <b>
@@ -2258,13 +1845,13 @@ function Dashboard({
               Complete a chapter to begin
             </p>
           </div>
-        </div>}
+        </div>
       </div>
 
       <div className="dashboard-grid top-grid">
-        {visible("overall-progress")&&<section className="panel overall-card" style={elementStyle("overall-progress")}>
+        <section className="panel overall-card">
           <h3>
-            {title("overall-progress","Overall Progress")}
+            Overall Progress
           </h3>
 
           <div className="overall-body">
@@ -2348,11 +1935,11 @@ function Dashboard({
               />
             </div>
           </div>
-        </section>}
+        </section>
 
-        {visible("activity-progress")&&<section className="panel activity-progress" style={elementStyle("activity-progress")}>
+        <section className="panel activity-progress">
           <h3>
-            {title("activity-progress","Progress by Activity")}
+            Progress by Activity
           </h3>
 
           {stages.map(
@@ -2380,11 +1967,11 @@ function Dashboard({
               />
             )
           )}
-        </section>}
+        </section>
 
-        {visible("study-week")&&<section className="panel study-card" style={elementStyle("study-week")}>
+        <section className="panel study-card">
           <h3>
-            {title("study-week","Study This Week")}
+            Study This Week
           </h3>
 
           <div className="study-total">
@@ -2410,14 +1997,14 @@ function Dashboard({
               studyHours
             }
           />
-        </section>}
+        </section>
       </div>
 
       <div className="dashboard-grid lower-grid">
-        {visible("subject-progress")&&<section className="panel subject-panel" style={elementStyle("subject-progress")}>
+        <section className="panel subject-panel">
           <div className="panel-heading">
             <h3>
-              {title("subject-progress","Subject Progress")}
+              Subject Progress
             </h3>
 
             <button
@@ -2451,12 +2038,12 @@ function Dashboard({
               />
             )
           )}
-        </section>}
+        </section>
 
-        {visible("recent-activity")&&<section className="panel recent-panel" style={elementStyle("recent-activity")}>
+        <section className="panel recent-panel">
           <div className="panel-heading">
             <h3>
-              {title("recent-activity","Recent Activity")}
+              Recent Activity
             </h3>
 
             <button
@@ -2488,15 +2075,63 @@ function Dashboard({
                 No saved activity yet.
               </div>
             )}
-        </section>}
+        </section>
 
-        {visible("quick-actions")&&<section className="panel quick-panel" style={elementStyle("quick-actions")}>
+        <section className="panel quick-panel">
           <h3>
-            {title("quick-actions","Quick Actions")}
+            Quick Actions
           </h3>
 
-          <div className="quick-grid">{(configured?quickActions:[{element_key:"quick-study",label:"Start Study Session",config:{}},{element_key:"quick-test",label:"Take a Test",config:{}},{element_key:"quick-goal",label:"Add Goal",config:{}},{element_key:"quick-calendar",label:"View Calendar",config:{}}] as AppPageElement[]).map(action=><button key={action.element_key} onClick={actionMap[action.element_key]||(()=>{const route=String(action.config?.route||"");if(route)window.location.href=route})}><Goal/><span>{action.label}</span></button>)}</div>
-        </section>}
+          <div className="quick-grid">
+            <button
+              onClick={
+                onQuickStudy
+              }
+            >
+              <Clock3 />
+
+              <span>
+                Start Study Session
+              </span>
+            </button>
+
+            <button
+              onClick={
+                onQuickTest
+              }
+            >
+              <ClipboardCheck />
+
+              <span>
+                Take a Test
+              </span>
+            </button>
+
+            <button
+              onClick={
+                onQuickGoal
+              }
+            >
+              <Goal />
+
+              <span>
+                Add Goal
+              </span>
+            </button>
+
+            <button
+              onClick={
+                onQuickCalendar
+              }
+            >
+              <CalendarDays />
+
+              <span>
+                View Calendar
+              </span>
+            </button>
+          </div>
+        </section>
       </div>
     </>
   );
@@ -3212,12 +2847,6 @@ function StudySessionsView({
     setMinutes,
   ] = useState("30");
 
-  useEffect(() => {
-    if (!subjects.includes(subject)) {
-      setSubject(subjects[0]);
-    }
-  }, [subject, subjects]);
-
   const add = (
     event: FormEvent
   ) => {
@@ -3623,12 +3252,6 @@ function TestsView({
     maxScore,
     setMaxScore,
   ] = useState("100");
-
-  useEffect(() => {
-    if (!subjects.includes(subject)) {
-      setSubject(subjects[0]);
-    }
-  }, [subject, subjects]);
 
   const add = (
     event: FormEvent
@@ -4203,52 +3826,13 @@ function WorkspaceRow({
 
 function SettingsView({
   email,
-  signedIn,
-  isAdmin,
-  courseLevel,
-  courseGroup,
-  onCourseChange,
-  onSignIn,
   onLogout,
 }: {
   email: string;
-  signedIn: boolean;
-  isAdmin: boolean;
-  courseLevel: CourseLevel;
-  courseGroup: CourseGroup;
-  onCourseChange: (
-    level: CourseLevel,
-    group: CourseGroup
-  ) => void;
-  onSignIn: () => void;
   onLogout: () => void;
 }) {
-  const [selectedLevel, setSelectedLevel] =
-    useState<CourseLevel>(courseLevel);
-  const [selectedGroup, setSelectedGroup] =
-    useState<CourseGroup>(courseGroup);
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    setSelectedLevel(courseLevel);
-    setSelectedGroup(courseGroup);
-  }, [courseGroup, courseLevel]);
-
-  const saveCourse = () => {
-    onCourseChange(
-      selectedLevel,
-      selectedLevel === "Foundation"
-        ? "Both"
-        : selectedGroup
-    );
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 1800);
-  };
-
-  const accountName = email || "Guest account";
-
   return (
-    <section className="single-page settings-page">
+    <section className="single-page">
       <div className="page-heading">
         <div>
           <h2>
@@ -4256,172 +3840,41 @@ function SettingsView({
           </h2>
 
           <p>
-            Manage your course, account and data preferences.
+            Manage your account.
           </p>
         </div>
       </div>
 
-      <div className="settings-layout">
-        {isAdmin && (
-          <section className="panel settings-section settings-admin-link">
-            <div className="settings-section-head">
-              <span className="settings-section-icon"><Shield size={18} /></span>
-              <div><h3>Administration</h3><p>Manage sections, plans, members, administrators and community messages.</p></div>
-            </div>
-            <button type="button" onClick={() => { window.location.href = "/admin"; }}>Open admin panel</button>
-          </section>
-        )}
-        <section className="panel settings-section course-settings">
-          <div className="settings-section-head">
-            <span className="settings-section-icon">
-              <BookOpen size={18} />
-            </span>
+      <section className="panel settings-account">
+        <div className="settings-avatar">
+          {email
+            .charAt(0)
+            .toUpperCase()}
+        </div>
 
-            <div>
-              <h3>Course preferences</h3>
-              <p>Choose the syllabus and papers shown throughout your dashboard.</p>
-            </div>
-          </div>
+        <div>
+          <h3>
+            Account
+          </h3>
 
-          <div className="settings-level-grid">
-            {(["Foundation", "Intermediate", "Final"] as CourseLevel[]).map(
-              (level) => (
-                <button
-                  type="button"
-                  key={level}
-                  className={selectedLevel === level ? "active" : ""}
-                  onClick={() => {
-                    setSelectedLevel(level);
-                    if (level === "Foundation") {
-                      setSelectedGroup("Both");
-                    }
-                    setSaved(false);
-                  }}
-                >
-                  <strong>CA {level}</strong>
-                  <span>
-                    {level === "Foundation"
-                      ? "4 papers"
-                      : "6 papers · 2 groups"}
-                  </span>
-                </button>
-              )
-            )}
-          </div>
+          <p>
+            {email}
+          </p>
+        </div>
 
-          {selectedLevel !== "Foundation" && (
-            <div className="settings-group-block">
-              <label>Paper selection</label>
+        <button
+          className="settings-logout"
+          onClick={
+            onLogout
+          }
+        >
+          <LogOut
+            size={17}
+          />
 
-              <div className="settings-group-grid">
-                {(["Group 1", "Group 2", "Both"] as CourseGroup[]).map(
-                  (group) => (
-                    <button
-                      type="button"
-                      key={group}
-                      className={selectedGroup === group ? "active" : ""}
-                      onClick={() => {
-                        setSelectedGroup(group);
-                        setSaved(false);
-                      }}
-                    >
-                      <strong>{group}</strong>
-                      <span>{group === "Both" ? "All 6 papers" : "3 papers"}</span>
-                    </button>
-                  )
-                )}
-              </div>
-            </div>
-          )}
-
-          <div className="settings-save-row">
-            <span>
-              Currently showing: CA {courseLevel}
-              {courseLevel !== "Foundation" ? ` · ${courseGroup}` : ""}
-            </span>
-
-            <button type="button" onClick={saveCourse} className={saved ? "saved" : ""}>
-              <Save size={15} />
-              {saved ? "Preferences saved" : "Save preferences"}
-            </button>
-          </div>
-        </section>
-
-        <section className="panel settings-section settings-account">
-          <div className="settings-section-head">
-            <div className="settings-avatar">
-              {accountName.charAt(0).toUpperCase() || "C"}
-            </div>
-
-            <div>
-              <h3>{signedIn ? "Your account" : "Guest account"}</h3>
-              <p>
-                {signedIn
-                  ? accountName
-                  : "Browse freely. Sign in when you want to save and sync progress."}
-              </p>
-            </div>
-          </div>
-
-          <div className="settings-account-status">
-            <span className={signedIn ? "connected" : "guest"}>
-              {signedIn ? "Connected to Supabase" : "Progress sync unavailable"}
-            </span>
-
-            {signedIn ? (
-              <button className="settings-logout" onClick={onLogout}>
-                <LogOut size={16} />
-                Logout
-              </button>
-            ) : (
-              <button className="settings-signin" onClick={onSignIn}>
-                <LogIn size={16} />
-                Sign in
-              </button>
-            )}
-          </div>
-        </section>
-
-        <section className="panel settings-section settings-membership">
-          <div className="settings-section-head">
-            <span className="settings-section-icon"><Crown size={18} /></span>
-            <div><h3>Membership and plans</h3><p>Compare available subscriptions and unlock eligible premium features.</p></div>
-          </div>
-          <button type="button" onClick={() => { window.location.href = "/pricing"; }}>
-            View subscription plans
-          </button>
-        </section>
-
-        <section className="panel settings-section settings-data">
-          <div className="settings-section-head">
-            <span className="settings-section-icon">
-              <Settings size={18} />
-            </span>
-
-            <div>
-              <h3>Data and device</h3>
-              <p>Understand where your preferences and study progress are stored.</p>
-            </div>
-          </div>
-
-          <div className="settings-data-list">
-            <div>
-              <strong>Course preference</strong>
-              <span>Remembered on this device</span>
-            </div>
-
-            <div>
-              <strong>Study progress</strong>
-              <span>{signedIn ? "Synced securely to your account" : "Not saved while browsing as guest"}</span>
-            </div>
-
-            <div>
-              <strong>Community</strong>
-              <span>{signedIn ? "Available for your selected course" : "Sign in required"}</span>
-            </div>
-          </div>
-        </section>
-      </div>
+          Logout
+        </button>
+      </section>
     </section>
   );
 }
@@ -4790,31 +4243,20 @@ function AuthStyles() {
 
       .auth-right { display:flex; align-items:center; justify-content:center; padding:32px; }
       .auth-card { width:100%; max-width:430px; background:#fff; border:1px solid #e8ebf1; border-radius:22px; padding:42px; box-shadow:0 20px 70px rgba(25,38,68,.08); }
-      .auth-mobile-logo { display:none; width:46px; height:46px; place-items:center; margin:0 auto 18px; border-radius:14px; background:#edf3ff; color:#245ec2; font-size:17px; font-weight:800; }
       .auth-card-head h2 { margin:0; color:#182033; font-size:30px; letter-spacing:-1px; }
       .auth-card-head p { margin:9px 0 30px; color:#7c8595; line-height:1.6; font-size:14px; }
       .auth-form { display:grid; gap:17px; }
       .auth-form label { display:grid; gap:8px; color:#4d5564; font-size:13px; font-weight:600; }
       .auth-form input { width:100%; box-sizing:border-box; height:48px; border:1px solid #dfe3eb; border-radius:11px; padding:0 14px; outline:none; font-size:14px; transition:.2s; }
       .auth-form input:focus { border-color:#2d68cf; box-shadow:0 0 0 4px rgba(45,104,207,.08); }
-      .auth-form .auth-remember { display:flex; align-items:flex-start; gap:10px; cursor:pointer; }
-      .auth-form .auth-remember input { width:17px; height:17px; margin:2px 0 0; padding:0; flex:0 0 auto; accent-color:#245ec2; box-shadow:none; }
-      .auth-remember span,.auth-remember strong,.auth-remember small { display:block; }
-      .auth-remember strong { color:#3f4858; font-size:13px; }
-      .auth-remember small { margin-top:3px; color:#8a93a2; font-size:11px; font-weight:400; line-height:1.4; }
 
       .auth-submit,.auth-google { width:100%; height:50px; border-radius:11px; cursor:pointer; font-size:14px; font-weight:700; }
       .auth-submit { border:0; background:#245ec2; color:#fff; margin-top:4px; }
       .auth-submit:hover { background:#1d51aa; }
-      .auth-google { border:1px solid #dfe3eb; background:#fff; color:#293244; display:flex; align-items:center; justify-content:center; gap:10px; }
+      .auth-google { border:1px solid #dfe3eb; background:#fff; color:#293244; }
       .auth-google:hover { background:#f8f9fb; }
       .auth-submit:disabled,.auth-google:disabled { opacity:.65; cursor:not-allowed; }
       .auth-divider { text-align:center; color:#98a0ae; font-size:12px; }
-      .auth-method-divider { display:flex; align-items:center; gap:12px; margin:22px 0; white-space:nowrap; }
-      .auth-method-divider::before,.auth-method-divider::after { content:""; height:1px; background:#e7eaf0; flex:1; }
-      .google-mark { width:22px; height:22px; display:grid; place-items:center; border-radius:50%; background:linear-gradient(135deg,#4285f4 0 25%,#34a853 25% 50%,#fbbc05 50% 75%,#ea4335 75%); color:#fff; font-size:12px; font-weight:800; }
-      .auth-change-phone { border:0; background:transparent; color:#245ec2; font-size:12px; font-weight:700; cursor:pointer; justify-self:center; }
-      .auth-form input:disabled { background:#f4f6f9; color:#6f7887; }
 
       .auth-switch { margin-top:25px; text-align:center; color:#778092; font-size:13px; }
       .auth-switch button { border:0; background:none; color:#245ec2; font-weight:700; margin-left:6px; cursor:pointer; }
@@ -4828,20 +4270,22 @@ function AuthStyles() {
       .auth-config-warning { margin-top:20px; background:#fff8e8; color:#8a6316; }
 
       @media (max-width:850px) {
-        .auth-page { grid-template-columns:1fr; min-height:100dvh; background:#f5f7fb; }
-        .auth-left { display:none; }
-        .auth-right { min-height:100dvh; padding:28px 18px; }
+        .auth-page { grid-template-columns:1fr; }
+        .auth-left { min-height:auto; padding:32px 24px 50px; }
+        .auth-hero { margin:65px 0 0; }
+        .auth-hero h1 { font-size:48px; }
+        .auth-footer { display:none; }
+        .auth-right { padding:28px 18px 40px; }
         .auth-card { padding:30px 22px; }
-        .auth-mobile-logo { display:grid; }
-        .auth-card-head { text-align:center; }
       }
 
       @media (max-width:520px) {
-        .auth-right { align-items:flex-start; padding:24px 14px; }
-        .auth-card { max-width:none; padding:28px 20px; border-radius:20px; box-shadow:0 14px 45px rgba(25,38,68,.07); }
-        .auth-card-head h2 { font-size:25px; }
-        .auth-card-head p { margin-bottom:25px; font-size:13px; }
-        .auth-submit,.auth-google { height:52px; }
+        .auth-left { padding:24px 18px 36px; }
+        .auth-hero { margin:42px 0 0; }
+        .auth-hero h1 { font-size:38px; letter-spacing:-2px; }
+        .auth-hero > p { font-size:14px; margin:18px 0 28px; }
+        .auth-right { padding:20px 14px 32px; }
+        .auth-card { padding:26px 18px; border-radius:17px; }
       }
     `}</style>
   );
