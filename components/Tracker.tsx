@@ -395,8 +395,9 @@ export default function Tracker({
         const error =
           await signIn(
             email,
-            password
-          );
+            password,
+  rememberOnDevice
+);
 
         if (error) {
           setAuthError(error);
