@@ -208,6 +208,7 @@ const publicViews: View[] = [
   "Dashboard",
   "Subjects",
   "Chapters",
+  "Settings",
 ];
 
 const viewRoutes: Record<
@@ -855,7 +856,9 @@ export default function Tracker({
       <TrackerDashboard
         initialView={initialView}
         email={
-          session?.user.email || ""
+          session?.user.email ||
+          session?.user.phone ||
+          ""
         }
         userId={
           session?.user.id || null
@@ -1060,25 +1063,22 @@ function TrackerDashboard({
       : "Both";
   });
 
-  const [
-    draftLevel,
-    setDraftLevel,
-  ] = useState<CourseLevel>(courseLevel);
+  const [onboardingLevel, setOnboardingLevel] =
+    useState<CourseLevel>(courseLevel);
+  const [onboardingGroup, setOnboardingGroup] =
+    useState<CourseGroup>(courseGroup);
+  const [showCourseOnboarding, setShowCourseOnboarding] =
+    useState(false);
 
-  const [
-    draftGroup,
-    setDraftGroup,
-  ] = useState<CourseGroup>(courseGroup);
-
-  const [
-    showCourseSelector,
-    setShowCourseSelector,
-  ] = useState(() =>
-    typeof window !== "undefined" &&
-    !window.localStorage.getItem(
-      "ca-progress-course-group"
-    )
-  );
+  useEffect(() => {
+    if (
+      !window.localStorage.getItem(
+        "ca-progress-course-onboarding-complete"
+      )
+    ) {
+      setShowCourseOnboarding(true);
+    }
+  }, []);
 
   const subjects = useMemo(
     () =>
@@ -1234,7 +1234,6 @@ function TrackerDashboard({
     setCourseGroup(resolvedGroup);
     setActiveSubject(nextSubjects[0]);
     setSearch("");
-    setShowCourseSelector(false);
 
     window.localStorage.setItem(
       "ca-progress-course-level",
@@ -1499,25 +1498,20 @@ function TrackerDashboard({
 
   return (
     <main className="app-shell">
-      {showCourseSelector && (
+      {showCourseOnboarding && (
         <div className="course-modal-backdrop">
           <section
             className="course-modal"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="course-modal-title"
+            aria-labelledby="course-onboarding-title"
           >
             <div className="course-modal-head">
               <span className="course-modal-logo">CA</span>
 
               <div>
-                <h2 id="course-modal-title">
-                  Choose your course
-                </h2>
-
-                <p>
-                  Your dashboard will show only the papers relevant to this selection.
-                </p>
+                <h2 id="course-onboarding-title">Set up your dashboard</h2>
+                <p>Choose your CA level and papers. You can change this later from Settings.</p>
               </div>
             </div>
 
@@ -1527,30 +1521,20 @@ function TrackerDashboard({
                   <button
                     type="button"
                     key={level}
-                    className={
-                      draftLevel === level
-                        ? "course-level-card active"
-                        : "course-level-card"
-                    }
+                    className={onboardingLevel === level ? "course-level-card active" : "course-level-card"}
                     onClick={() => {
-                      setDraftLevel(level);
-                      if (level === "Foundation") {
-                        setDraftGroup("Both");
-                      }
+                      setOnboardingLevel(level);
+                      if (level === "Foundation") setOnboardingGroup("Both");
                     }}
                   >
                     <strong>CA {level}</strong>
-                    <span>
-                      {level === "Foundation"
-                        ? "4 papers"
-                        : "6 papers · 2 groups"}
-                    </span>
+                    <span>{level === "Foundation" ? "4 papers" : "6 papers · 2 groups"}</span>
                   </button>
                 )
               )}
             </div>
 
-            {draftLevel !== "Foundation" && (
+            {onboardingLevel !== "Foundation" && (
               <div className="course-group-section">
                 <label>Select papers</label>
 
@@ -1560,19 +1544,11 @@ function TrackerDashboard({
                       <button
                         type="button"
                         key={group}
-                        className={
-                          draftGroup === group
-                            ? "active"
-                            : ""
-                        }
-                        onClick={() => setDraftGroup(group)}
+                        className={onboardingGroup === group ? "active" : ""}
+                        onClick={() => setOnboardingGroup(group)}
                       >
                         <strong>{group}</strong>
-                        <span>
-                          {group === "Both"
-                            ? "All 6 papers"
-                            : "3 papers"}
-                        </span>
+                        <span>{group === "Both" ? "All 6 papers" : "3 papers"}</span>
                       </button>
                     )
                   )}
@@ -1584,14 +1560,16 @@ function TrackerDashboard({
               <button
                 type="button"
                 className="course-apply"
-                onClick={() =>
-                  applyCourseSelection(
-                    draftLevel,
-                    draftGroup
-                  )
-                }
+                onClick={() => {
+                  applyCourseSelection(onboardingLevel, onboardingGroup);
+                  window.localStorage.setItem(
+                    "ca-progress-course-onboarding-complete",
+                    "true"
+                  );
+                  setShowCourseOnboarding(false);
+                }}
               >
-                Open my dashboard
+                Continue to dashboard
               </button>
             </div>
           </section>
@@ -1614,25 +1592,6 @@ function TrackerDashboard({
             PROGRESS
           </small>
         </div>
-
-        <button
-          type="button"
-          className="course-switcher"
-          onClick={() => {
-            setDraftLevel(courseLevel);
-            setDraftGroup(courseGroup);
-            setShowCourseSelector(true);
-          }}
-        >
-          <span>Current course</span>
-          <strong>CA {courseLevel}</strong>
-          <small>
-            {courseLevel === "Foundation"
-              ? "All papers"
-              : courseGroup}
-            {" · Change"}
-          </small>
-        </button>
 
         <nav>
           {menu.map(
@@ -2060,6 +2019,11 @@ function TrackerDashboard({
             email={
               email
             }
+            signedIn={Boolean(userId)}
+            courseLevel={courseLevel}
+            courseGroup={courseGroup}
+            onCourseChange={applyCourseSelection}
+            onSignIn={onRequireAuth}
             onLogout={
               onLogout
             }
@@ -4158,13 +4122,50 @@ function WorkspaceRow({
 
 function SettingsView({
   email,
+  signedIn,
+  courseLevel,
+  courseGroup,
+  onCourseChange,
+  onSignIn,
   onLogout,
 }: {
   email: string;
+  signedIn: boolean;
+  courseLevel: CourseLevel;
+  courseGroup: CourseGroup;
+  onCourseChange: (
+    level: CourseLevel,
+    group: CourseGroup
+  ) => void;
+  onSignIn: () => void;
   onLogout: () => void;
 }) {
+  const [selectedLevel, setSelectedLevel] =
+    useState<CourseLevel>(courseLevel);
+  const [selectedGroup, setSelectedGroup] =
+    useState<CourseGroup>(courseGroup);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setSelectedLevel(courseLevel);
+    setSelectedGroup(courseGroup);
+  }, [courseGroup, courseLevel]);
+
+  const saveCourse = () => {
+    onCourseChange(
+      selectedLevel,
+      selectedLevel === "Foundation"
+        ? "Both"
+        : selectedGroup
+    );
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 1800);
+  };
+
+  const accountName = email || "Guest account";
+
   return (
-    <section className="single-page">
+    <section className="single-page settings-page">
       <div className="page-heading">
         <div>
           <h2>
@@ -4172,41 +4173,153 @@ function SettingsView({
           </h2>
 
           <p>
-            Manage your account.
+            Manage your course, account and data preferences.
           </p>
         </div>
       </div>
 
-      <section className="panel settings-account">
-        <div className="settings-avatar">
-          {email
-            .charAt(0)
-            .toUpperCase()}
-        </div>
+      <div className="settings-layout">
+        <section className="panel settings-section course-settings">
+          <div className="settings-section-head">
+            <span className="settings-section-icon">
+              <BookOpen size={18} />
+            </span>
 
-        <div>
-          <h3>
-            Account
-          </h3>
+            <div>
+              <h3>Course preferences</h3>
+              <p>Choose the syllabus and papers shown throughout your dashboard.</p>
+            </div>
+          </div>
 
-          <p>
-            {email}
-          </p>
-        </div>
+          <div className="settings-level-grid">
+            {(["Foundation", "Intermediate", "Final"] as CourseLevel[]).map(
+              (level) => (
+                <button
+                  type="button"
+                  key={level}
+                  className={selectedLevel === level ? "active" : ""}
+                  onClick={() => {
+                    setSelectedLevel(level);
+                    if (level === "Foundation") {
+                      setSelectedGroup("Both");
+                    }
+                    setSaved(false);
+                  }}
+                >
+                  <strong>CA {level}</strong>
+                  <span>
+                    {level === "Foundation"
+                      ? "4 papers"
+                      : "6 papers · 2 groups"}
+                  </span>
+                </button>
+              )
+            )}
+          </div>
 
-        <button
-          className="settings-logout"
-          onClick={
-            onLogout
-          }
-        >
-          <LogOut
-            size={17}
-          />
+          {selectedLevel !== "Foundation" && (
+            <div className="settings-group-block">
+              <label>Paper selection</label>
 
-          Logout
-        </button>
-      </section>
+              <div className="settings-group-grid">
+                {(["Group 1", "Group 2", "Both"] as CourseGroup[]).map(
+                  (group) => (
+                    <button
+                      type="button"
+                      key={group}
+                      className={selectedGroup === group ? "active" : ""}
+                      onClick={() => {
+                        setSelectedGroup(group);
+                        setSaved(false);
+                      }}
+                    >
+                      <strong>{group}</strong>
+                      <span>{group === "Both" ? "All 6 papers" : "3 papers"}</span>
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="settings-save-row">
+            <span>
+              Currently showing: CA {courseLevel}
+              {courseLevel !== "Foundation" ? ` · ${courseGroup}` : ""}
+            </span>
+
+            <button type="button" onClick={saveCourse} className={saved ? "saved" : ""}>
+              <Save size={15} />
+              {saved ? "Preferences saved" : "Save preferences"}
+            </button>
+          </div>
+        </section>
+
+        <section className="panel settings-section settings-account">
+          <div className="settings-section-head">
+            <div className="settings-avatar">
+              {accountName.charAt(0).toUpperCase() || "C"}
+            </div>
+
+            <div>
+              <h3>{signedIn ? "Your account" : "Guest account"}</h3>
+              <p>
+                {signedIn
+                  ? accountName
+                  : "Browse freely. Sign in when you want to save and sync progress."}
+              </p>
+            </div>
+          </div>
+
+          <div className="settings-account-status">
+            <span className={signedIn ? "connected" : "guest"}>
+              {signedIn ? "Connected to Supabase" : "Progress sync unavailable"}
+            </span>
+
+            {signedIn ? (
+              <button className="settings-logout" onClick={onLogout}>
+                <LogOut size={16} />
+                Logout
+              </button>
+            ) : (
+              <button className="settings-signin" onClick={onSignIn}>
+                <LogIn size={16} />
+                Sign in
+              </button>
+            )}
+          </div>
+        </section>
+
+        <section className="panel settings-section settings-data">
+          <div className="settings-section-head">
+            <span className="settings-section-icon">
+              <Settings size={18} />
+            </span>
+
+            <div>
+              <h3>Data and device</h3>
+              <p>Understand where your preferences and study progress are stored.</p>
+            </div>
+          </div>
+
+          <div className="settings-data-list">
+            <div>
+              <strong>Course preference</strong>
+              <span>Remembered on this device</span>
+            </div>
+
+            <div>
+              <strong>Study progress</strong>
+              <span>{signedIn ? "Synced securely to your account" : "Not saved while browsing as guest"}</span>
+            </div>
+
+            <div>
+              <strong>Community</strong>
+              <span>{signedIn ? "Available for your selected course" : "Sign in required"}</span>
+            </div>
+          </div>
+        </section>
+      </div>
     </section>
   );
 }
