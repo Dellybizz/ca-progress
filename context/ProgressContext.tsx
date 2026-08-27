@@ -222,19 +222,16 @@ type ProgressContextValue = {
 
   saveStatus: SaveStatus;
 
-  signIn: (
-    email: string,
-    password: string,
+  sendPhoneOtp: (
+    phone: string,
     rememberOnDevice: boolean
   ) => Promise<string | null>;
 
-  signUp: (
-    email: string,
-    password: string
-  ) => Promise<{
-    error: string | null;
-    needsConfirmation: boolean;
-  }>;
+  verifyPhoneOtp: (
+    phone: string,
+    token: string,
+    rememberOnDevice: boolean
+  ) => Promise<string | null>;
 
   signInWithGoogle: (
     rememberOnDevice: boolean
@@ -448,61 +445,61 @@ export function ProgressProvider({
   }, [session?.user.id]);
 
   /* =========================================================
-     EMAIL LOGIN
+     PHONE OTP LOGIN
   ========================================================= */
 
-  const signIn = async (
-    email: string,
-    password: string,
+  const setRememberPreference = (
     rememberOnDevice: boolean
   ) => {
-    if (!supabase) {
-      return "Supabase is not configured. Check your Vercel environment variables.";
-    }
-
     if (typeof window !== "undefined") {
       window.localStorage.setItem(
         rememberDeviceKey,
         String(rememberOnDevice)
       );
     }
+  };
+
+  const sendPhoneOtp = async (
+    phone: string,
+    rememberOnDevice: boolean
+  ) => {
+    if (!supabase) {
+      return "Supabase is not configured. Check your Vercel environment variables.";
+    }
+
+    setRememberPreference(
+      rememberOnDevice
+    );
 
     const { error } =
-      await supabase.auth.signInWithPassword({
-        email,
-        password,
+      await supabase.auth.signInWithOtp({
+        phone,
       });
 
     return error?.message || null;
   };
 
-  /* =========================================================
-     EMAIL SIGNUP
-  ========================================================= */
-
-  const signUp = async (
-    email: string,
-    password: string
+  const verifyPhoneOtp = async (
+    phone: string,
+    token: string,
+    rememberOnDevice: boolean
   ) => {
     if (!supabase) {
-      return {
-        error:
-          "Supabase is not configured. Check your Vercel environment variables.",
-        needsConfirmation: false,
-      };
+      return "Supabase is not configured. Check your Vercel environment variables.";
     }
 
-    const { data, error } =
-      await supabase.auth.signUp({
-        email,
-        password,
+    setRememberPreference(
+      rememberOnDevice
+    );
+
+    const { error } =
+      await supabase.auth.verifyOtp({
+        phone,
+        token,
+        type: "sms",
       });
 
-    return {
-      error: error?.message || null,
-      needsConfirmation:
-        !error && !data.session,
-    };
+    return error?.message || null;
   };
 
   /* =========================================================
@@ -517,12 +514,9 @@ export function ProgressProvider({
         return "Supabase is not configured. Check your Vercel environment variables.";
       }
 
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(
-          rememberDeviceKey,
-          String(rememberOnDevice)
-        );
-      }
+      setRememberPreference(
+        rememberOnDevice
+      );
 
       const redirectTo =
         typeof window !== "undefined"
@@ -649,8 +643,8 @@ export function ProgressProvider({
 
         saveStatus,
 
-        signIn,
-        signUp,
+        sendPhoneOtp,
+        verifyPhoneOtp,
         signInWithGoogle,
         signOut,
 
