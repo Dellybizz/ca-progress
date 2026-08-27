@@ -9,6 +9,13 @@ Open Supabase **SQL Editor**, paste the complete contents of:
 Run it once. It preserves existing users, progress and subscriptions. The earliest
 existing Owner becomes the single Parent Owner.
 
+Then run the complete contents of:
+
+`supabase/moderation-controls.sql`
+
+This adds the protected member-directory fallback, per-channel Moderator
+permissions, timed chat blocks and student violation notices.
+
 ## 2. Add Vercel server variables
 
 In Vercel → Project → Settings → Environment Variables add:
@@ -42,4 +49,3 @@ then open `/pricing` from Settings and purchase a plan.
 - Admin and Moderator: cannot grant or remove administrator access.
 - Nobody can change or remove their own role.
 - Parent ownership can only change through the protected transfer control.
-
