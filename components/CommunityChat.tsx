@@ -15,6 +15,7 @@ const supabase =
 type CommunityMessage = {
   id: string;
   user_id: string;
+  display_name: string | null;
   channel: string;
   message: string;
   created_at: string;
@@ -70,6 +71,15 @@ function formatTime(dateString: string) {
   });
 }
 
+function formatStudentName(email?: string | null) {
+  const emailName = email?.split("@")[0] || "Student";
+
+  return emailName
+    .replace(/[._-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+    .trim();
+}
+
 export default function CommunityChat({
   userId,
   email,
@@ -104,10 +114,7 @@ export default function CommunityChat({
         channel.id === activeChannel
     ) || channels[0];
 
-  const displayName =
-    email
-      ? email.split("@")[0]
-      : "Student";
+  const displayName = formatStudentName(email);
 
   useEffect(() => {
     if (!supabase) {
@@ -234,6 +241,7 @@ export default function CommunityChat({
         .from("community_messages")
         .insert({
           user_id: userId,
+          display_name: displayName,
           channel: activeChannel,
           message: trimmed,
         });
@@ -345,6 +353,9 @@ export default function CommunityChat({
             (item) => {
               const isMine =
                 item.user_id === userId;
+              const studentName =
+                item.display_name?.trim() ||
+                (isMine ? displayName : "CA Student");
 
               return (
                 <div
@@ -356,19 +367,19 @@ export default function CommunityChat({
                   }
                 >
                   <div className="message-avatar">
-                    {isMine
-                      ? displayName
-                          .charAt(0)
-                          .toUpperCase()
-                      : "S"}
+                    {studentName
+                      .charAt(0)
+                      .toUpperCase()}
                   </div>
 
                   <div className="message-content">
                     <div className="message-meta">
                       <strong>
-                        {isMine
-                          ? "You"
-                          : "CA Student"}
+                        {studentName}
+
+                        {isMine && (
+                          <em>You</em>
+                        )}
                       </strong>
 
                       <span>
@@ -570,8 +581,22 @@ export default function CommunityChat({
         }
 
         .message-meta strong {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
           font-size: 12px;
           color: #354050;
+        }
+
+        .message-meta em {
+          padding: 2px 5px;
+          border-radius: 999px;
+          background: #eaf1ff;
+          color: #2d67ca;
+          font-size: 8px;
+          font-style: normal;
+          font-weight: 700;
+          text-transform: uppercase;
         }
 
         .message-meta span {
@@ -667,9 +692,11 @@ export default function CommunityChat({
 
         @media (max-width: 760px) {
           .community {
-            height: calc(100vh - 100px);
-            min-height: 560px;
+            height: calc(100dvh - 92px);
+            min-height: 480px;
             grid-template-columns: 1fr;
+            grid-template-rows: auto minmax(0, 1fr);
+            border-radius: 14px;
           }
 
           .community-sidebar {
@@ -684,25 +711,107 @@ export default function CommunityChat({
           .community-channels {
             display: flex;
             overflow-x: auto;
-            padding: 8px;
+            gap: 5px;
+            padding: 9px 10px;
+            scrollbar-width: none;
+            overscroll-behavior-x: contain;
+          }
+
+          .community-channels::-webkit-scrollbar {
+            display: none;
           }
 
           .community-channel {
             width: auto;
             flex: 0 0 auto;
             white-space: nowrap;
+            min-height: 38px;
+            padding: 8px 11px;
           }
 
           .community-header {
-            padding: 16px 18px;
+            padding: 13px 15px;
+          }
+
+          .community-title h1 {
+            font-size: 16px;
+          }
+
+          .community-header p {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
           }
 
           .community-messages {
-            padding: 18px;
+            gap: 15px;
+            padding: 16px 13px;
+            overscroll-behavior: contain;
+          }
+
+          .community-message {
+            max-width: 92%;
+            gap: 8px;
+          }
+
+          .community-message.mine {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+          }
+
+          .community-message.mine .message-meta {
+            justify-content: flex-end;
+          }
+
+          .message-avatar {
+            flex-basis: 32px;
+            width: 32px;
+            height: 32px;
+            font-size: 12px;
+          }
+
+          .message-bubble {
+            padding: 9px 11px;
+            font-size: 12px;
+          }
+
+          .mine .message-bubble {
+            border-radius: 12px 4px 12px 12px;
           }
 
           .community-input {
-            padding: 12px;
+            padding: 10px 11px calc(10px + env(safe-area-inset-bottom));
+            background: #fff;
+          }
+
+          .community-input input,
+          .community-input button {
+            height: 42px;
+          }
+
+          .community-input button {
+            width: 42px;
+          }
+        }
+
+        @media (max-width: 420px) {
+          .community {
+            height: calc(100dvh - 82px);
+            border-left: 0;
+            border-right: 0;
+            border-radius: 0;
+          }
+
+          .community-header p {
+            display: none;
+          }
+
+          .message-meta {
+            gap: 5px;
+          }
+
+          .message-meta span {
+            font-size: 9px;
           }
         }
       `}</style>
