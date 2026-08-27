@@ -29,7 +29,10 @@ const supabase = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
-const defaultStudyHours = [1.2, 2.1, 1.6, 2.8, 2.4, 3.5, 4.5];
+const defaultStudyHours = [0, 0, 0, 0, 0, 0, 0];
+const legacySampleStudyHours = [1.2, 2.1, 1.6, 2.8, 2.4, 3.5, 4.5];
+const isLegacySample = (hours?: number[]) =>
+  Boolean(hours && hours.length === legacySampleStudyHours.length && hours.every((value, index) => value === legacySampleStudyHours[index]));
 
 type ProgressContextValue = {
   session: Session | null;
@@ -140,7 +143,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         }> | undefined;
         setProgress(saved?.progress || {});
         setActivities(saved?.activities || []);
-        setStudyHours(saved?.studyHours || defaultStudyHours);
+        setStudyHours(isLegacySample(saved?.studyHours) ? defaultStudyHours : (saved?.studyHours || defaultStudyHours));
         setStudySessions(saved?.studySessions || []);
         setGoals(saved?.goals || []);
         setTests(saved?.tests || []);
