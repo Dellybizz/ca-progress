@@ -10,6 +10,10 @@ import {
   Trophy,
   Users,
 } from "lucide-react";
+import type {
+  CourseLevel,
+  SubjectName,
+} from "@/lib/syllabus";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -28,24 +32,21 @@ type CommunityMessage = {
   created_at: string;
 };
 
-const mainChannels = [
-  ["general", "General", "Discuss anything related to CA preparation."],
-  ["doubts", "Doubts", "Ask questions and help other students."],
-  ["announcements", "Announcements", "Important community updates."],
-  ["resources", "Resources", "Share useful notes and study resources."],
-  ["results", "Result Talk", "Discuss exams, results and preparation."],
-] as const;
+type ChatChannel = [string, string, string];
 
-const studyRooms = [
-  ["audit", "Audit", "Study Audit together."],
-  ["taxation", "Taxation", "Discuss taxation concepts and questions."],
-  ["accounting", "Accounting", "Practice accounting concepts together."],
-  ["law", "Law", "Discuss important law concepts and cases."],
-  ["costing", "Costing", "Solve costing questions with other students."],
-  ["fm-sm", "FM & SM", "Discuss Financial Management and Strategic Management."],
-] as const;
+const generalChannel: ChatChannel = [
+  "general",
+  "General",
+  "The shared community chat for students from every CA level.",
+];
 
-const channels = [...mainChannels, ...studyRooms] as const;
+function channelSlug(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
 
 function studentName(email?: string | null) {
   const value = email?.split("@")[0] || "Student";
@@ -68,9 +69,13 @@ function messageTime(value: string) {
 export default function CommunityChat({
   userId,
   email,
+  courseLevel,
+  subjects,
 }: {
   userId: string;
   email?: string | null;
+  courseLevel: CourseLevel;
+  subjects: SubjectName[];
 }) {
   const [activeChannel, setActiveChannel] = useState("general");
   const [messages, setMessages] = useState<CommunityMessage[]>([]);
@@ -81,8 +86,56 @@ export default function CommunityChat({
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const displayName = useMemo(() => studentName(email), [email]);
 
+  const levelChannels = useMemo<ChatChannel[]>(() => {
+    const prefix = channelSlug(courseLevel);
+
+    return [
+      [
+        `${prefix}-announcements`,
+        "Announcements",
+        `Important updates for CA ${courseLevel} students.`,
+      ],
+      [
+        `${prefix}-resources`,
+        "Resources",
+        `Share notes and preparation resources for CA ${courseLevel}.`,
+      ],
+      [
+        `${prefix}-results`,
+        "Result Talk",
+        `Discuss CA ${courseLevel} exams and results.`,
+      ],
+      [
+        `${prefix}-talk`,
+        `${courseLevel} Talk`,
+        `General conversation for CA ${courseLevel} students.`,
+      ],
+    ];
+  }, [courseLevel]);
+
+  const doubtChannels = useMemo<ChatChannel[]>(
+    () =>
+      subjects.map((subject) => [
+        `${channelSlug(courseLevel)}-doubts-${channelSlug(subject)}`,
+        subject,
+        `Ask and answer doubts about ${subject}.`,
+      ]),
+    [courseLevel, subjects]
+  );
+
+  const channels = useMemo(
+    () => [generalChannel, ...levelChannels, ...doubtChannels],
+    [doubtChannels, levelChannels]
+  );
+
   const currentChannel =
     channels.find(([id]) => id === activeChannel) || channels[0];
+
+  useEffect(() => {
+    if (!channels.some(([id]) => id === activeChannel)) {
+      setActiveChannel("general");
+    }
+  }, [activeChannel, channels]);
 
   const participants = useMemo(() => {
     const names = messages
@@ -237,8 +290,20 @@ export default function CommunityChat({
         </div>
 
         <nav className="chat-channels" aria-label="Community channels">
-          <span className="channel-group-title">Channels</span>
-          {mainChannels.map(([id, label]) => (
+          <span className="channel-group-title">Community</span>
+          <button
+            type="button"
+            className={activeChannel === "general" ? "active" : ""}
+            onClick={() => setActiveChannel("general")}
+          >
+            <Hash size={16} />
+            <span>General</span>
+          </button>
+
+          <span className="channel-group-title study-title">
+            {courseLevel}
+          </span>
+          {levelChannels.map(([id, label]) => (
             <button
               type="button"
               key={id}
@@ -250,15 +315,15 @@ export default function CommunityChat({
             </button>
           ))}
 
-          <span className="channel-group-title study-title">Study rooms</span>
-          {studyRooms.map(([id, label]) => (
+          <span className="channel-group-title study-title">Doubts</span>
+          {doubtChannels.map(([id, label]) => (
             <button
               type="button"
               key={id}
               className={id === activeChannel ? "active" : ""}
               onClick={() => setActiveChannel(id)}
             >
-              <Users size={15} />
+              <BookOpen size={15} />
               <span>{label}</span>
             </button>
           ))}
@@ -393,7 +458,7 @@ export default function CommunityChat({
         .chat-composer{width:100%;min-width:0;padding:12px 15px calc(12px + env(safe-area-inset-bottom));display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:9px;border-top:1px solid #e9edf3;background:#fff}.chat-composer input{width:100%;min-width:0;height:44px;padding:0 14px;border:1px solid #dce3ec;border-radius:11px;outline:0;font-size:13px}.chat-composer input:focus{border-color:#82a8e4;box-shadow:0 0 0 3px rgba(45,103,202,.08)}.chat-composer button{width:44px;height:44px;display:grid;place-items:center;border:0;border-radius:11px;background:#2d67ca;color:#fff}.chat-composer button:disabled{opacity:.4}.chat-error{padding:0 16px 9px;color:#bd4141;font-size:10px}
         .chat-insights{min-width:0;overflow-y:auto;border-left:1px solid #e9edf3;background:#fbfcfe;padding:18px 14px}.chat-insights section+section{margin-top:24px}.insight-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;color:#354156;font-size:10px;font-weight:800}.insight-heading span{display:flex;align-items:center;gap:6px}.insight-heading b{padding:3px 6px;border-radius:999px;background:#eaf1ff;color:#2863c7;font-size:8px}.student-list{display:grid;gap:11px}.student-item{display:flex;align-items:center;gap:8px}.student-avatar{position:relative;width:29px;height:29px;flex:0 0 29px;display:grid;place-items:center;border-radius:50%;background:#eaf1ff;color:#2863c7;font-size:10px;font-weight:800}.student-avatar.shade-1{background:#f2eafe;color:#7455b8}.student-avatar.shade-2{background:#e7f7ef;color:#32805d}.student-avatar.shade-3{background:#fff0e5;color:#b56728}.student-avatar i{position:absolute;right:0;bottom:0;width:7px;height:7px;border:1.5px solid #fff;border-radius:50%;background:#35a66f}.student-item div{min-width:0;display:grid;gap:2px}.student-item strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#3c4758;font-size:9px}.student-item small{color:#929baa;font-size:7px}.focus-card{padding:12px;border:1px solid #e2e8f1;border-radius:11px;background:#fff}.focus-card strong{font-size:10px}.focus-card p{margin:5px 0 11px;color:#7e8999;font-size:8px;line-height:1.5}.focus-card div{display:flex;align-items:center;gap:6px;color:#6d798b;font-size:7px}.focus-card i{width:7px;height:7px;border-radius:50%;background:#35a66f}
         @media(max-width:1180px){.chat-shell{grid-template-columns:210px minmax(0,1fr)}.chat-insights{display:none}}
-        @media(max-width:760px){.chat-shell{position:fixed;z-index:12;top:64px;right:8px;bottom:0;left:8px;width:auto;max-width:none;height:auto;min-height:0;max-height:none;grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr);border-radius:12px}.chat-sidebar{width:100%;min-height:0;border-right:0;border-bottom:1px solid #e9edf3}.chat-brand,.channel-group-title{display:none}.chat-channels{width:100%;max-width:100%;padding:8px;display:flex;gap:4px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none}.chat-channels::-webkit-scrollbar{display:none}.chat-channels button{width:auto;height:38px;flex:0 0 auto;padding:0 10px;white-space:nowrap}.chat-panel{width:100%;max-width:100%;height:100%;min-height:0;overflow:hidden}.chat-header{padding:12px 14px}.chat-heading strong{font-size:15px}.chat-header p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.chat-messages{height:100%;min-height:0;padding:13px 11px;gap:14px}.chat-pinned{padding:10px}.chat-message{width:min(92%,520px)}.chat-avatar{width:31px;height:31px;flex-basis:31px}.chat-meta strong{max-width:140px}.chat-message p{padding:8px 10px;font-size:12px}.chat-composer{padding:9px 9px calc(9px + env(safe-area-inset-bottom));grid-template-columns:minmax(0,1fr) 42px;gap:7px}.chat-composer input,.chat-composer button{height:42px}.chat-composer button{width:42px}}
+        @media(max-width:760px){.chat-shell{position:fixed;z-index:12;top:64px;right:8px;bottom:0;left:8px;width:auto;max-width:none;height:auto;min-height:0;max-height:none;grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr);border-radius:12px}.chat-sidebar{width:100%;min-height:0;border-right:0;border-bottom:1px solid #e9edf3}.chat-brand{display:none}.chat-channels{width:100%;max-width:100%;padding:8px;display:flex;align-items:center;gap:4px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none}.chat-channels::-webkit-scrollbar{display:none}.channel-group-title,.channel-group-title.study-title{display:flex;align-items:center;align-self:center;flex:0 0 auto;height:28px;margin:0 3px 0 7px;padding:0;color:#71809a;font-size:8px}.chat-channels button{width:auto;height:38px;flex:0 0 auto;padding:0 10px;white-space:nowrap}.chat-panel{width:100%;max-width:100%;height:100%;min-height:0;overflow:hidden}.chat-header{padding:12px 14px}.chat-heading strong{font-size:15px}.chat-header p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.chat-messages{height:100%;min-height:0;padding:13px 11px;gap:14px}.chat-pinned{padding:10px}.chat-message{width:min(92%,520px)}.chat-avatar{width:31px;height:31px;flex-basis:31px}.chat-meta strong{max-width:140px}.chat-message p{padding:8px 10px;font-size:12px}.chat-composer{padding:9px 9px calc(9px + env(safe-area-inset-bottom));grid-template-columns:minmax(0,1fr) 42px;gap:7px}.chat-composer input,.chat-composer button{height:42px}.chat-composer button{width:42px}}
         @media(max-width:420px){.chat-shell{top:54px;right:0;left:0;border-left:0;border-right:0;border-bottom:0;border-radius:0}.chat-header p{display:none}.chat-messages{padding:13px 9px}.chat-message{width:95%;gap:7px}.chat-meta{gap:4px}.chat-meta strong{max-width:120px}.chat-meta time{font-size:8px}.chat-composer{grid-template-columns:minmax(0,1fr) 40px;padding-left:8px;padding-right:8px}.chat-composer button{width:40px}}
       `}</style>
     </section>
