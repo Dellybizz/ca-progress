@@ -1,0 +1,4865 @@
+"use client";
+
+import {
+  FormEvent,
+  CSSProperties,
+  Dispatch,
+  ReactNode,
+  SetStateAction,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import { useRouter } from "next/navigation";
+
+import {
+  Activity,
+  Bell,
+  BookOpen,
+  CalendarDays,
+  Check,
+  ChevronRight,
+  ClipboardCheck,
+  Clock3,
+  Crown,
+  FileText,
+  Flame,
+  Goal,
+  Home,
+  LineChart,
+  LogIn,
+  LogOut,
+  Lock,
+  Menu,
+  MessageCircle,
+  NotebookPen,
+  Plus,
+  Save,
+  Search,
+  Settings,
+  Shield,
+  Target,
+  Trophy,
+} from "lucide-react";
+
+import CommunityChat from "@/components/CommunityChat";
+
+import {
+  CourseGroup,
+  CourseLevel,
+  getSubjectsForSelection,
+  syllabus,
+  SubjectName,
+} from "@/lib/syllabus";
+
+import {
+  ActivityItem,
+  CalendarItem,
+  GoalItem,
+  NoteItem,
+  Progress,
+  SaveStatus,
+  Stage,
+  StudySessionItem,
+  TestItem,
+  useProgress,
+} from "@/context/ProgressContext";
+
+/* =========================================================
+   TYPES
+========================================================= */
+
+type View =
+  | "Dashboard"
+  | "Community"
+  | "Subjects"
+  | "Chapters"
+  | "Analytics"
+  | "Study Sessions"
+  | "Goals"
+  | "Test Series"
+  | "Calendar"
+  | "Activity"
+  | "Notes"
+  | "Settings";
+
+type AuthMode =
+  | "login"
+  | "signup";
+
+/* =========================================================
+   CONSTANTS
+========================================================= */
+
+const stages: {
+  key: Stage;
+  label: string;
+  short: string;
+}[] = [
+  {
+    key: "done",
+    label: "Completed",
+    short: "Completed",
+  },
+  {
+    key: "revision1",
+    label: "1st Revision",
+    short: "1R",
+  },
+  {
+    key: "revision2",
+    label: "2nd Revision",
+    short: "2R",
+  },
+  {
+    key: "testDone",
+    label: "Test 1",
+    short: "Test 1",
+  },
+  {
+    key: "test2Done",
+    label: "Test 2",
+    short: "Test 2",
+  },
+];
+
+const stagePrerequisites: Record<
+  Stage,
+  Stage | null
+> = {
+  done: null,
+  revision1: "done",
+  revision2: "revision1",
+  testDone: "done",
+  test2Done: "testDone",
+};
+
+const stageDependsOn = (
+  stage: Stage,
+  earlierStage: Stage
+): boolean => {
+  const prerequisite =
+    stagePrerequisites[stage];
+
+  return (
+    prerequisite === earlierStage ||
+    Boolean(
+      prerequisite &&
+        stageDependsOn(
+          prerequisite,
+          earlierStage
+        )
+    )
+  );
+};
+
+const menu: {
+  label: View;
+  icon: typeof Home;
+}[] = [
+  {
+    label: "Dashboard",
+    icon: Home,
+  },
+  {
+    label: "Community",
+    icon: MessageCircle,
+  },
+  {
+    label: "Subjects",
+    icon: BookOpen,
+  },
+  {
+    label: "Chapters",
+    icon: NotebookPen,
+  },
+  {
+    label: "Analytics",
+    icon: LineChart,
+  },
+  {
+    label: "Study Sessions",
+    icon: Clock3,
+  },
+  {
+    label: "Goals",
+    icon: Target,
+  },
+  {
+    label: "Test Series",
+    icon: ClipboardCheck,
+  },
+  {
+    label: "Calendar",
+    icon: CalendarDays,
+  },
+  {
+    label: "Activity",
+    icon: Activity,
+  },
+  {
+    label: "Notes",
+    icon: FileText,
+  },
+  {
+    label: "Settings",
+    icon: Settings,
+  },
+];
+
+const publicViews: View[] = [
+  "Dashboard",
+  "Subjects",
+  "Chapters",
+  "Settings",
+];
+
+const viewRoutes: Record<
+  View,
+  string
+> = {
+  Dashboard: "/dashboard",
+  Community: "/community",
+  Subjects: "/subjects",
+  Chapters: "/chapters",
+  Analytics: "/analytics",
+  "Study Sessions": "/study-sessions",
+  Goals: "/goals",
+  "Test Series": "/test-series",
+  Calendar: "/calendar",
+  Activity: "/activity",
+  Notes: "/notes",
+  Settings: "/settings",
+};
+
+const viewSectionKeys: Record<View, string> = {
+  Dashboard: "dashboard",
+  Community: "community",
+  Subjects: "subjects",
+  Chapters: "chapters",
+  Analytics: "analytics",
+  "Study Sessions": "study-sessions",
+  Goals: "goals",
+  "Test Series": "test-series",
+  Calendar: "calendar",
+  Activity: "activity",
+  Notes: "notes",
+  Settings: "settings",
+};
+
+const subjectMeta: Record<
+  SubjectName,
+  {
+    code: string;
+    color: string;
+    short: string;
+  }
+> = {
+  Accounting: {
+    code: "AC",
+    color: "#4263c7",
+    short: "Accounting",
+  },
+
+  "Business Laws": {
+    code: "BL",
+    color: "#c94f7c",
+    short: "Business Laws",
+  },
+
+  "Quantitative Aptitude": {
+    code: "QA",
+    color: "#6b5dcc",
+    short: "Quantitative Aptitude",
+  },
+
+  "Business Economics": {
+    code: "BE",
+    color: "#3d9a82",
+    short: "Business Economics",
+  },
+
+  "Advanced Accounting": {
+    code: "AA",
+    color: "#5b6fd6",
+    short: "Advanced Accounting",
+  },
+
+  "Corporate and Other Laws": {
+    code: "CL",
+    color: "#d94c8a",
+    short: "Corporate & Other Laws",
+  },
+
+  Taxation: {
+    code: "TX",
+    color: "#f19a35",
+    short: "Taxation",
+  },
+
+  "Cost and Management Accounting": {
+    code: "CM",
+    color: "#3e84c7",
+    short: "Cost & Management A/c",
+  },
+
+  "Auditing and Ethics": {
+    code: "AE",
+    color: "#46a597",
+    short: "Auditing & Ethics",
+  },
+
+  "Financial Management & Strategic Management": {
+    code: "FM",
+    color: "#2f78bd",
+    short: "Financial Management",
+  },
+
+  "Financial Reporting": {
+    code: "FR",
+    color: "#5368d4",
+    short: "Financial Reporting",
+  },
+
+  "Advanced Financial Management": {
+    code: "AF",
+    color: "#327fbc",
+    short: "Advanced Financial Management",
+  },
+
+  "Advanced Auditing, Assurance and Professional Ethics": {
+    code: "AU",
+    color: "#3d9b8c",
+    short: "Advanced Audit & Ethics",
+  },
+
+  "Direct Tax Laws & International Taxation": {
+    code: "DT",
+    color: "#e08a35",
+    short: "Direct Tax & International Tax",
+  },
+
+  "Indirect Tax Laws": {
+    code: "IT",
+    color: "#d55b78",
+    short: "Indirect Tax Laws",
+  },
+
+  "Integrated Business Solutions": {
+    code: "IB",
+    color: "#7659c6",
+    short: "Integrated Business Solutions",
+  },
+};
+
+const stageCopy: Record<
+  Stage,
+  string
+> = {
+  done: "Marked as Completed",
+  revision1: "1st Revision Completed",
+  revision2: "2nd Revision Completed",
+  testDone: "Test 1 Completed",
+  test2Done: "Test 2 Completed",
+};
+
+const keyFor = (
+  subject: string,
+  chapter: string
+) => {
+  return `${subject}::${chapter}`;
+};
+
+/* =========================================================
+   MAIN COMPONENT
+========================================================= */
+
+export default function Tracker({
+  initialView = "Dashboard",
+  authPage,
+}: {
+  initialView?: View;
+  authPage?: AuthMode;
+}) {
+  const router = useRouter();
+
+  const {
+    session,
+    authLoading,
+    guestMode,
+    configured,
+    sendPhoneOtp,
+    verifyPhoneOtp,
+    signInWithGoogle,
+    signOut,
+    continueAsGuest,
+    requireAuth,
+  } = useProgress();
+
+  const [
+    phone,
+    setPhone,
+  ] = useState("");
+
+  const [
+    phoneOtp,
+    setPhoneOtp,
+  ] = useState("");
+
+  const [
+    phoneOtpSent,
+    setPhoneOtpSent,
+  ] = useState(false);
+
+  const [
+    authError,
+    setAuthError,
+  ] = useState("");
+
+  const [
+    authMessage,
+    setAuthMessage,
+  ] = useState("");
+
+  const [
+    submitting,
+    setSubmitting,
+  ] = useState(false);
+
+  const [
+    rememberOnDevice,
+    setRememberOnDevice,
+  ] = useState(true);
+
+  const [
+    showLoginPrompt,
+    setShowLoginPrompt,
+  ] = useState(false);
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (session && authPage) {
+      router.replace("/dashboard");
+    }
+  }, [
+    authLoading,
+    authPage,
+    router,
+    session,
+  ]);
+
+  /* =======================================================
+     PHONE OTP LOGIN
+  ======================================================= */
+
+  const handleAuth = async (
+    event: FormEvent
+  ) => {
+    event.preventDefault();
+
+    setAuthError("");
+    setAuthMessage("");
+    setSubmitting(true);
+
+    try {
+      const digits = phone.replace(/\D/g, "");
+
+      if (digits.length < 10) {
+        setAuthError(
+          "Enter a valid mobile number with country code."
+        );
+        return;
+      }
+
+      const normalizedPhone =
+        digits.length === 10
+          ? `+91${digits}`
+          : phone.trim().startsWith("+")
+          ? `+${digits}`
+          : `+${digits}`;
+
+      if (!phoneOtpSent) {
+        const error = await sendPhoneOtp(
+          normalizedPhone,
+          rememberOnDevice
+        );
+
+        if (error) setAuthError(error);
+        else {
+          setPhoneOtpSent(true);
+          setAuthMessage(
+            `Verification code sent to ${normalizedPhone}.`
+          );
+        }
+      } else {
+        const error = await verifyPhoneOtp(
+          normalizedPhone,
+          phoneOtp.trim(),
+          rememberOnDevice
+        );
+
+        if (error) setAuthError(error);
+      }
+    } catch {
+      setAuthError(
+        "Something went wrong. Please try again."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleGoogleSignIn =
+    async () => {
+      setAuthError("");
+      setAuthMessage("");
+      setSubmitting(true);
+
+      try {
+        const error =
+          await signInWithGoogle(
+            rememberOnDevice
+          );
+
+        if (error) {
+          setAuthError(error);
+          setSubmitting(false);
+        }
+      } catch {
+        setAuthError(
+          "Unable to continue with Google. Please try again."
+        );
+
+        setSubmitting(false);
+      }
+    };
+
+  /* =======================================================
+     LOGOUT
+  ======================================================= */
+
+  const handleLogout =
+    async () => {
+      await signOut();
+    };
+
+  /* =======================================================
+     LOADING
+  ======================================================= */
+
+  if (authLoading) {
+    return (
+      <div className="auth-loading">
+        <div className="auth-spinner" />
+
+        <p>
+          Loading CA Progress...
+        </p>
+
+        <style>{`
+          .auth-loading {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            background: #f7f8fb;
+            color: #172033;
+            font-family: Arial, sans-serif;
+          }
+
+          .auth-spinner {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: 3px solid #dfe5f0;
+            border-top-color: #2d68cf;
+            animation: spin 0.8s linear infinite;
+          }
+
+          @keyframes spin {
+            to {
+              transform: rotate(360deg);
+            }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  /* =======================================================
+     AUTH SCREEN
+  ======================================================= */
+
+  if (
+    session &&
+    authPage
+  ) {
+    return (
+      <div className="auth-loading">
+        <div className="auth-spinner" />
+
+        <p>
+          Opening your dashboard...
+        </p>
+      </div>
+    );
+  }
+
+  if (
+    !session &&
+    Boolean(authPage)
+  ) {
+    return (
+      <>
+        <div className="auth-page">
+          <div className="auth-left">
+            <div className="auth-brand">
+              <div className="auth-logo">
+                CA
+              </div>
+
+              <span>
+                PROGRESS
+              </span>
+            </div>
+
+            <div className="auth-hero">
+              <div className="auth-badge">
+                ALL CA LEVELS
+              </div>
+
+              <h1>
+                Your preparation.
+                <br />
+
+                <span>
+                  Clearly tracked.
+                </span>
+              </h1>
+
+              <p>
+                Track chapters,
+                revisions, tests
+                and your preparation
+                progress in one focused
+                workspace.
+              </p>
+
+              <div className="auth-features">
+                <AuthFeature
+                  icon={
+                    <BookOpen
+                      size={18}
+                    />
+                  }
+                  title="Track every chapter"
+                  text="Stay organised across all subjects."
+                />
+
+                <AuthFeature
+                  icon={
+                    <LineChart
+                      size={18}
+                    />
+                  }
+                  title="See your progress"
+                  text="Know exactly how far you have come."
+                />
+
+                <AuthFeature
+                  icon={
+                    <Target
+                      size={18}
+                    />
+                  }
+                  title="Stay consistent"
+                  text="Build momentum every day."
+                />
+              </div>
+            </div>
+
+            <div className="auth-footer">
+              Built for focused CA
+              preparation.
+            </div>
+          </div>
+
+          <div className="auth-right">
+            <div className="auth-card">
+              <div className="auth-card-head">
+                <div className="auth-mobile-logo">
+                  CA
+                </div>
+
+                <h2>Welcome to CA Progress</h2>
+
+                <p>
+                  Sign in or create an account securely with Google or your phone number.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="auth-google"
+                onClick={handleGoogleSignIn}
+                disabled={submitting}
+              >
+                <span className="google-mark">G</span>
+                Continue with Google
+              </button>
+
+              <div className="auth-divider auth-method-divider">
+                <span>or use your phone number</span>
+              </div>
+
+              <form
+                onSubmit={handleAuth}
+                className="auth-form"
+              >
+                <label>
+                  Mobile number
+
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="+91 98765 43210"
+                    value={phone}
+                    onChange={(event) =>
+                      setPhone(
+                        event.target.value
+                      )
+                    }
+                    disabled={phoneOtpSent}
+                    required
+                  />
+                </label>
+
+                {phoneOtpSent && (
+                  <label>
+                    Verification code
+
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="Enter 6-digit code"
+                      value={phoneOtp}
+                      onChange={(event) =>
+                        setPhoneOtp(
+                          event.target.value.replace(
+                            /\D/g,
+                            ""
+                          ).slice(0, 6)
+                        )
+                      }
+                      minLength={6}
+                      maxLength={6}
+                      required
+                      autoFocus
+                    />
+                  </label>
+                )}
+
+                <label className="auth-remember">
+                  <input
+                    type="checkbox"
+                    checked={rememberOnDevice}
+                    onChange={(event) =>
+                      setRememberOnDevice(
+                        event.target.checked
+                      )
+                    }
+                  />
+
+                  <span>
+                    <strong>
+                      Remember on this device
+                    </strong>
+
+                    <small>
+                      Stay signed in after closing your browser.
+                    </small>
+                  </span>
+                </label>
+
+                {authError && (
+                  <div className="auth-error">
+                    {authError}
+                  </div>
+                )}
+
+                {authMessage && (
+                  <div className="auth-success">
+                    {authMessage}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="auth-submit"
+                  disabled={submitting}
+                >
+                  {submitting
+                    ? "Please wait..."
+                    : phoneOtpSent
+                    ? "Verify and continue"
+                    : "Send verification code"}
+                </button>
+
+                {phoneOtpSent && (
+                  <button
+                    type="button"
+                    className="auth-change-phone"
+                    onClick={() => {
+                      setPhoneOtpSent(false);
+                      setPhoneOtp("");
+                      setAuthError("");
+                      setAuthMessage("");
+                    }}
+                  >
+                    Change phone number
+                  </button>
+                )}
+              </form>
+
+              <button
+                type="button"
+                className="auth-guest"
+                onClick={() => {
+                  setAuthError("");
+                  setAuthMessage("");
+
+                  continueAsGuest();
+
+                  router.push(
+                    "/dashboard"
+                  );
+                }}
+              >
+                Continue without an account
+              </button>
+
+              <p className="auth-guest-note">
+                Browse subjects and chapters
+                freely. Sign in only when you
+                want to track and save your
+                progress.
+              </p>
+
+              {!configured && (
+                <div className="auth-config-warning">
+                  Supabase environment
+                  variables are missing.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <AuthStyles />
+      </>
+    );
+  }
+
+  /* =======================================================
+     TRACKER DASHBOARD
+  ======================================================= */
+
+  return (
+    <>
+      <TrackerDashboard
+        initialView={initialView}
+        email={
+          session?.user.email ||
+          session?.user.phone ||
+          ""
+        }
+        userId={
+          session?.user.id || null
+        }
+        onLogout={handleLogout}
+        onRequireAuth={() =>
+          setShowLoginPrompt(true)
+        }
+      />
+
+      {showLoginPrompt && (
+        <div
+          className="login-prompt-backdrop"
+          role="presentation"
+          onMouseDown={(
+            event
+          ) => {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
+              setShowLoginPrompt(false);
+            }
+          }}
+        >
+          <section
+            className="login-prompt"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="login-prompt-title"
+          >
+            <button
+              className="login-prompt-close"
+              onClick={() =>
+                setShowLoginPrompt(false)
+              }
+              aria-label="Close login prompt"
+            >
+              ×
+            </button>
+
+            <div className="login-prompt-icon">
+              <LogIn size={24} />
+            </div>
+
+            <h2 id="login-prompt-title">
+              Login required
+            </h2>
+
+            <p>
+              Please sign in or create an
+              account to use this feature
+              and securely sync your
+              progress.
+            </p>
+
+            <div className="login-prompt-actions">
+              <button
+                className="login-prompt-primary"
+                onClick={() => {
+                  setShowLoginPrompt(false);
+                  requireAuth();
+                  router.push("/login");
+                }}
+              >
+                Sign in
+              </button>
+
+              <button
+                className="login-prompt-secondary"
+                onClick={() => {
+                  setShowLoginPrompt(false);
+                  requireAuth();
+                  router.push("/signup");
+                }}
+              >
+                Create account
+              </button>
+            </div>
+
+            <button
+              className="login-prompt-later"
+              onClick={() =>
+                setShowLoginPrompt(false)
+              }
+            >
+              Not now
+            </button>
+          </section>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* =========================================================
+   AUTH FEATURE
+========================================================= */
+
+function AuthFeature({
+  icon,
+  title,
+  text,
+}: {
+  icon: ReactNode;
+  title: string;
+  text: string;
+}) {
+  return (
+    <div className="auth-feature">
+      <div className="auth-feature-icon">
+        {icon}
+      </div>
+
+      <div>
+        <strong>
+          {title}
+        </strong>
+
+        <span>
+          {text}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   TRACKER DASHBOARD
+========================================================= */
+
+function TrackerDashboard({
+  initialView,
+  email,
+  userId,
+  onLogout,
+  onRequireAuth,
+}: {
+  initialView: View;
+  email: string;
+  userId: string | null;
+  onLogout: () => void;
+  onRequireAuth: () => void;
+}) {
+  const router = useRouter();
+
+  const {
+    progress,
+    setProgress,
+    activities,
+    setActivities,
+    studyHours,
+    setStudyHours,
+    studySessions,
+    setStudySessions,
+    goals,
+    setGoals,
+    tests,
+    setTests,
+    calendarItems,
+    setCalendarItems,
+    notes,
+    setNotes,
+    saveStatus,
+    planRank,
+    planSlug,
+    isAdmin,
+    sectionRules,
+    saveProgress:
+      saveStoredProgress,
+  } = useProgress();
+
+  const [
+    courseLevel,
+    setCourseLevel,
+  ] = useState<CourseLevel>(() => {
+    if (typeof window === "undefined") {
+      return "Intermediate";
+    }
+
+    const saved = window.localStorage.getItem(
+      "ca-progress-course-level"
+    ) as CourseLevel | null;
+
+    return saved &&
+      ["Foundation", "Intermediate", "Final"].includes(saved)
+      ? saved
+      : "Intermediate";
+  });
+
+  const [
+    courseGroup,
+    setCourseGroup,
+  ] = useState<CourseGroup>(() => {
+    if (typeof window === "undefined") {
+      return "Both";
+    }
+
+    const saved = window.localStorage.getItem(
+      "ca-progress-course-group"
+    ) as CourseGroup | null;
+
+    return saved &&
+      ["Group 1", "Group 2", "Both"].includes(saved)
+      ? saved
+      : "Both";
+  });
+
+  const [onboardingLevel, setOnboardingLevel] =
+    useState<CourseLevel>(courseLevel);
+  const [onboardingGroup, setOnboardingGroup] =
+    useState<CourseGroup>(courseGroup);
+  const [showCourseOnboarding, setShowCourseOnboarding] =
+    useState(false);
+
+  useEffect(() => {
+    if (
+      !window.localStorage.getItem(
+        "ca-progress-course-onboarding-complete"
+      )
+    ) {
+      setShowCourseOnboarding(true);
+    }
+  }, []);
+
+  const subjects = useMemo(
+    () =>
+      getSubjectsForSelection(
+        courseLevel,
+        courseGroup
+      ),
+    [courseGroup, courseLevel]
+  );
+
+  const allRows = useMemo(
+    () =>
+      subjects.flatMap(
+        (subject) =>
+          syllabus[subject].map(
+            (chapter) => ({
+              subject,
+              chapter,
+              key: keyFor(
+                subject,
+                chapter
+              ),
+            })
+          )
+      ),
+    [subjects]
+  );
+
+  const [
+    view,
+    setView,
+  ] = useState<View>(() => {
+    if (
+      !userId &&
+      !publicViews.includes(
+        initialView
+      )
+    ) {
+      return "Dashboard";
+    }
+
+    if (
+      initialView !==
+      "Dashboard"
+    ) {
+      return initialView;
+    }
+
+    if (
+      typeof window ===
+      "undefined"
+    ) {
+      return initialView;
+    }
+
+    const savedView =
+      window.localStorage.getItem(
+        "ca-progress-view"
+      ) as View | null;
+
+    return menu.some(
+      (item) =>
+        item.label === savedView
+    ) &&
+      (
+        Boolean(userId) ||
+        publicViews.includes(
+          savedView as View
+        )
+      )
+      ? savedView!
+      : initialView;
+  });
+
+  useEffect(() => {
+    if (
+      !userId &&
+      !publicViews.includes(
+        view
+      )
+    ) {
+      setView("Dashboard");
+
+      router.replace(
+        viewRoutes.Dashboard
+      );
+    }
+  }, [
+    router,
+    userId,
+    view,
+  ]);
+
+  useEffect(() => {
+    if (
+      userId ||
+      publicViews.includes(
+        initialView
+      )
+    ) {
+      setView(initialView);
+    }
+  }, [
+    initialView,
+    userId,
+  ]);
+
+  const [
+    activeSubject,
+    setActiveSubject,
+  ] = useState<SubjectName>(() => {
+    if (
+      typeof window ===
+      "undefined"
+    ) {
+      return subjects[0];
+    }
+
+    const saved =
+      window.localStorage.getItem(
+        "ca-progress-subject"
+      ) as SubjectName | null;
+
+    return (
+      saved &&
+      subjects.includes(saved)
+    )
+      ? saved
+      : subjects[0];
+  });
+
+  const [
+    search,
+    setSearch,
+  ] = useState("");
+
+  const applyCourseSelection = (
+    nextLevel: CourseLevel,
+    nextGroup: CourseGroup
+  ) => {
+    const resolvedGroup =
+      nextLevel === "Foundation"
+        ? "Both"
+        : nextGroup;
+
+    const nextSubjects =
+      getSubjectsForSelection(
+        nextLevel,
+        resolvedGroup
+      );
+
+    setCourseLevel(nextLevel);
+    setCourseGroup(resolvedGroup);
+    setActiveSubject(nextSubjects[0]);
+    setSearch("");
+
+    window.localStorage.setItem(
+      "ca-progress-course-level",
+      nextLevel
+    );
+
+    window.localStorage.setItem(
+      "ca-progress-course-group",
+      resolvedGroup
+    );
+
+    window.localStorage.setItem(
+      "ca-progress-subject",
+      nextSubjects[0]
+    );
+  };
+
+  const [
+    sidebarOpen,
+    setSidebarOpen,
+  ] = useState(false);
+
+  const [
+    toast,
+    setToast,
+  ] = useState("");
+
+  const [upgradeFeature, setUpgradeFeature] = useState("");
+
+  const ruleFor = (label: View) =>
+    sectionRules.find(
+      (rule) => rule.section_key === viewSectionKeys[label]
+    );
+
+  const ruleIsVisible = (label: View) => {
+    const rule = ruleFor(label);
+    if (!rule || isAdmin) return true;
+    const now = Date.now();
+    if (!rule.enabled) return false;
+    if (rule.starts_at && new Date(rule.starts_at).getTime() > now) return false;
+    if (rule.ends_at && new Date(rule.ends_at).getTime() < now) return false;
+    if (rule.audience === "guest" && userId) return false;
+    if (rule.audience === "member" && !userId) return false;
+    return true;
+  };
+
+  const visibleMenu = menu
+    .filter((item) => ruleIsVisible(item.label))
+    .sort((a, b) =>
+      (ruleFor(a.label)?.sort_order ?? 999) -
+      (ruleFor(b.label)?.sort_order ?? 999)
+    );
+
+  useEffect(() => {
+    if (!sectionRules.length) return;
+    const rule = ruleFor(view);
+    const planLocked = Boolean(
+      userId &&
+      !isAdmin &&
+      rule &&
+      planRank < rule.minimum_plan_rank
+    );
+
+    if (!ruleIsVisible(view) || planLocked) {
+      if (planLocked) setUpgradeFeature(rule?.label || view);
+      setView("Dashboard");
+      router.replace(viewRoutes.Dashboard);
+    }
+  }, [isAdmin, planRank, router, sectionRules, userId, view]);
+
+  const firstName =
+    email
+      ? email
+          .split("@")[0]
+          .replace(
+            /^[a-z]/,
+            (letter) =>
+              letter.toUpperCase()
+          )
+      : "Student";
+
+  const initial =
+    firstName
+      .charAt(0)
+      .toUpperCase() || "C";
+
+  const saveProgress =
+    async () => {
+      if (!userId) {
+        onRequireAuth();
+        return;
+      }
+
+      await saveStoredProgress();
+    };
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      "ca-progress-view",
+      view
+    );
+  }, [view]);
+
+  /* =======================================================
+     STATS
+  ======================================================= */
+
+  const counts =
+    useMemo(
+      () =>
+        Object.fromEntries(
+          stages.map(
+            (stage) => [
+              stage.key,
+              allRows.filter(
+                (row) =>
+                  progress[
+                    row.key
+                  ]?.[
+                    stage.key
+                  ]
+              ).length,
+            ]
+          )
+        ) as Record<
+          Stage,
+          number
+        >,
+      [
+        allRows,
+        progress,
+      ]
+    );
+
+  const subjectStats = (
+    subject: SubjectName
+  ) => {
+    const chapters =
+      syllabus[subject];
+
+    const done =
+      chapters.filter(
+        (chapter) =>
+          progress[
+            keyFor(
+              subject,
+              chapter
+            )
+          ]?.done
+      ).length;
+
+    return {
+      total:
+        chapters.length,
+
+      done,
+
+      percent:
+        chapters.length
+          ? Math.round(
+              (
+                done /
+                chapters.length
+              ) *
+                100
+            )
+          : 0,
+    };
+  };
+
+  const overall =
+    allRows.length
+      ? Math.round(
+          (
+            counts.done /
+            allRows.length
+          ) *
+            100
+        )
+      : 0;
+
+  /* =======================================================
+     HELPERS
+  ======================================================= */
+
+  const flash = (
+    message: string
+  ) => {
+    setToast(message);
+
+    window.setTimeout(
+      () => {
+        setToast("");
+      },
+      1800
+    );
+  };
+
+  const toggle = (
+    subject: SubjectName,
+    chapter: string,
+    stage: Stage
+  ) => {
+    if (!userId) {
+      onRequireAuth();
+      return;
+    }
+
+    const key =
+      keyFor(
+        subject,
+        chapter
+      );
+
+    const wasOn =
+      Boolean(
+        progress[key]?.[
+          stage
+        ]
+      );
+
+    const previousStage =
+      stagePrerequisites[
+        stage
+      ];
+
+    if (
+      !wasOn &&
+      previousStage &&
+      !progress[key]?.[
+        previousStage
+      ]
+    ) {
+      return;
+    }
+
+    setProgress(
+      (current) => {
+        const nextStages = {
+          ...current[key],
+          [stage]: !wasOn,
+        };
+
+        if (wasOn) {
+          stages.forEach(
+            (laterStage) => {
+              if (
+                stageDependsOn(
+                  laterStage.key,
+                  stage
+                )
+              ) {
+                nextStages[
+                  laterStage.key
+                ] = false;
+              }
+            }
+          );
+        }
+
+        return {
+          ...current,
+          [key]: nextStages,
+        };
+      }
+    );
+
+    if (!wasOn) {
+      setActivities(
+        (current) =>
+          [
+            {
+              id:
+                `${Date.now()}-${key}-${stage}`,
+              chapter,
+              subject,
+              stage,
+              time:
+                "Just now",
+            },
+            ...current,
+          ].slice(
+            0,
+            50
+          )
+      );
+    }
+  };
+  const nav = (
+    label: View
+  ) => {
+    const rule = ruleFor(label);
+    if (!ruleIsVisible(label)) return;
+
+    if (
+      userId &&
+      !isAdmin &&
+      rule &&
+      planRank < rule.minimum_plan_rank
+    ) {
+      setUpgradeFeature(rule.label || label);
+      setSidebarOpen(false);
+      return;
+    }
+
+    if (!userId && !publicViews.includes(label)) {
+      onRequireAuth();
+      setSidebarOpen(false);
+      return;
+    }
+
+    window.localStorage.setItem("ca-progress-view", label);
+    router.push(viewRoutes[label]);
+
+    setSidebarOpen(
+      false
+    );
+  };
+
+  return (
+    <main
+      className={`app-shell layout-${String(
+        ruleFor(view)?.appearance?.layout || "standard"
+      )}`}
+      style={{
+        "--blue": String(
+          ruleFor(view)?.appearance?.accentColor || "#2d68cf"
+        ),
+      } as CSSProperties}
+    >
+      {showCourseOnboarding && (
+        <div className="course-modal-backdrop">
+          <section
+            className="course-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="course-onboarding-title"
+          >
+            <div className="course-modal-head">
+              <span className="course-modal-logo">CA</span>
+
+              <div>
+                <h2 id="course-onboarding-title">Set up your dashboard</h2>
+                <p>Choose your CA level and papers. You can change this later from Settings.</p>
+              </div>
+            </div>
+
+            <div className="course-level-grid">
+              {(["Foundation", "Intermediate", "Final"] as CourseLevel[]).map(
+                (level) => (
+                  <button
+                    type="button"
+                    key={level}
+                    className={onboardingLevel === level ? "course-level-card active" : "course-level-card"}
+                    onClick={() => {
+                      setOnboardingLevel(level);
+                      if (level === "Foundation") setOnboardingGroup("Both");
+                    }}
+                  >
+                    <strong>CA {level}</strong>
+                    <span>{level === "Foundation" ? "4 papers" : "6 papers · 2 groups"}</span>
+                  </button>
+                )
+              )}
+            </div>
+
+            {onboardingLevel !== "Foundation" && (
+              <div className="course-group-section">
+                <label>Select papers</label>
+
+                <div className="course-group-grid">
+                  {(["Group 1", "Group 2", "Both"] as CourseGroup[]).map(
+                    (group) => (
+                      <button
+                        type="button"
+                        key={group}
+                        className={onboardingGroup === group ? "active" : ""}
+                        onClick={() => setOnboardingGroup(group)}
+                      >
+                        <strong>{group}</strong>
+                        <span>{group === "Both" ? "All 6 papers" : "3 papers"}</span>
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="course-modal-actions">
+              <button
+                type="button"
+                className="course-apply"
+                onClick={() => {
+                  applyCourseSelection(onboardingLevel, onboardingGroup);
+                  window.localStorage.setItem(
+                    "ca-progress-course-onboarding-complete",
+                    "true"
+                  );
+                  setShowCourseOnboarding(false);
+                }}
+              >
+                Continue to dashboard
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      <aside
+        className={`sidebar ${
+          sidebarOpen
+            ? "open"
+            : ""
+        }`}
+      >
+        <div className="brand">
+          <span>
+            CA
+          </span>
+
+          <small>
+            PROGRESS
+          </small>
+        </div>
+
+        <nav>
+          {visibleMenu.map(
+            (item) => {
+              const Icon =
+                item.icon;
+
+              return (
+                <button
+                  key={
+                    item.label
+                  }
+                  className={
+                    view ===
+                    item.label
+                      ? "nav-item active"
+                      : "nav-item"
+                  }
+                  onClick={() =>
+                    nav(
+                      item.label
+                    )
+                  }
+                >
+                  <Icon
+                    size={18}
+                  />
+
+                  <span>
+                    {ruleFor(item.label)?.label || item.label}
+                  </span>
+
+                  {userId &&
+                    !isAdmin &&
+                    planRank < (ruleFor(item.label)?.minimum_plan_rank || 0) && (
+                      <Lock size={12} className="nav-lock" />
+                    )}
+                </button>
+              );
+            }
+          )}
+        </nav>
+
+        <button
+          className="profile-card"
+          onClick={() => nav("Settings")}
+        >
+          <span className="avatar">
+            {initial}
+          </span>
+
+          <span>
+            <b>
+              {firstName}
+            </b>
+
+            <small>
+              CA {courseLevel}
+              {courseLevel !== "Foundation"
+                ? ` · ${courseGroup}`
+                : ""}
+            </small>
+          </span>
+
+          <ChevronRight
+            size={15}
+          />
+        </button>
+      </aside>
+
+      {sidebarOpen && (
+        <button
+          className="backdrop"
+          onClick={() =>
+            setSidebarOpen(
+              false
+            )
+          }
+          aria-label="Close menu"
+        />
+      )}
+
+      {upgradeFeature && (
+        <div className="login-prompt-backdrop">
+          <section className="login-prompt">
+            <button className="login-prompt-close" onClick={() => setUpgradeFeature("")}>×</button>
+            <div className="login-prompt-icon"><Crown size={23} /></div>
+            <h2>Upgrade required</h2>
+            <p>{upgradeFeature} is not included in your current {planSlug} plan. Contact the administrator or choose an eligible subscription.</p>
+            <button className="login-prompt-primary" onClick={() => setUpgradeFeature("")}>Okay</button>
+          </section>
+        </div>
+      )}
+
+      <section
+        className={`app-content ${
+          view === "Community"
+            ? "community-content"
+            : ""
+        }`}
+      >
+        <header className="topbar">
+          <button
+            className="mobile-menu"
+            onClick={() =>
+              setSidebarOpen(
+                true
+              )
+            }
+          >
+            <Menu
+              size={22}
+            />
+          </button>
+
+          <div className="hello">
+            <h1>
+              {view ===
+              "Dashboard"
+                ? `Hi, ${firstName}! 👋`
+                : view}
+            </h1>
+
+            <p>
+              {view ===
+              "Dashboard"
+                ? "Discipline today, success tomorrow."
+                : view === "Community"
+                  ? "Connect, discuss and study together with fellow CA students."
+                  : `Track every step of your CA ${courseLevel} preparation.`}
+            </p>
+          </div>
+
+          <div className="top-actions">
+            <button
+              className="icon-button"
+              onClick={() =>
+                nav("Chapters")
+              }
+              title="Search chapters"
+            >
+              <Search
+                size={19}
+              />
+            </button>
+
+            <button
+              className="icon-button"
+              onClick={() =>
+                nav("Activity")
+              }
+              title="View activity"
+            >
+              <Bell
+                size={19}
+              />
+            </button>
+
+            {userId ? (
+              <button
+                className="icon-button logout-button"
+                onClick={onLogout}
+                title="Logout"
+              >
+                <LogOut size={18} />
+              </button>
+            ) : (
+              <button
+                className="guest-login-button"
+                onClick={onRequireAuth}
+                title="Sign in to track progress"
+              >
+                <LogIn size={17} />
+
+                <span>
+                  Sign in
+                </span>
+              </button>
+            )}
+
+            <button
+              className="avatar large"
+              onClick={() =>
+                nav("Settings")
+              }
+              title="Account settings"
+            >
+              {initial}
+            </button>
+          </div>
+        </header>
+
+        {view ===
+          "Dashboard" && (
+          <Dashboard
+            courseLevel={courseLevel}
+            courseGroup={courseGroup}
+            subjects={
+              subjects
+            }
+            overall={
+              overall
+            }
+            counts={
+              counts
+            }
+            total={
+              allRows.length
+            }
+            subjectStats={
+              subjectStats
+            }
+            activities={
+              activities.filter(
+                (item) =>
+                  subjects.includes(
+                    item.subject as SubjectName
+                  )
+              )
+            }
+            studyHours={
+              userId
+                ? studyHours
+                : [0, 0, 0, 0, 0, 0, 0]
+            }
+            onSubjects={() =>
+              nav("Subjects")
+            }
+            onQuickStudy={() =>
+              nav("Study Sessions")
+            }
+            onQuickTest={() =>
+              nav("Test Series")
+            }
+            onQuickGoal={() =>
+              nav("Goals")
+            }
+            onQuickCalendar={() =>
+              nav("Calendar")
+            }
+            onViewAll={() =>
+              nav("Activity")
+            }
+          />
+        )}
+
+        {/* COMMUNITY */}
+        {view === "Community" && (
+          userId ? (
+            <CommunityChat
+              userId={userId}
+              email={email}
+              courseLevel={courseLevel}
+              subjects={subjects}
+            />
+          ) : null
+        )}
+
+        {view ===
+          "Subjects" && (
+          <SubjectsView
+            subjects={
+              subjects
+            }
+            subjectStats={
+              subjectStats
+            }
+            onOpen={(
+              subject
+            ) => {
+              setActiveSubject(
+                subject
+              );
+
+              window.localStorage.setItem(
+                "ca-progress-subject",
+                subject
+              );
+
+              nav("Chapters");
+            }}
+          />
+        )}
+
+        {view ===
+          "Chapters" && (
+          <ChaptersView
+            subjects={
+              subjects
+            }
+            activeSubject={
+              activeSubject
+            }
+            setActiveSubject={
+              setActiveSubject
+            }
+            search={
+              search
+            }
+            setSearch={
+              setSearch
+            }
+            progress={
+              progress
+            }
+            toggle={
+              toggle
+            }
+            subjectStats={
+              subjectStats
+            }
+            onSaveProgress={
+              saveProgress
+            }
+            saveStatus={
+              saveStatus
+            }
+            onBack={() =>
+              nav("Subjects")
+            }
+          />
+        )}
+
+        {view ===
+          "Analytics" && (
+          <AnalyticsView
+            overall={
+              overall
+            }
+            counts={
+              counts
+            }
+            total={
+              allRows.length
+            }
+            subjects={
+              subjects
+            }
+            subjectStats={
+              subjectStats
+            }
+            studyHours={
+              studyHours
+            }
+          />
+        )}
+
+        {view ===
+          "Activity" && (
+          <ActivityView
+            activities={
+              activities.filter(
+                (item) =>
+                  subjects.includes(
+                    item.subject as SubjectName
+                  )
+              )
+            }
+          />
+        )}
+
+        {view === "Study Sessions" && (
+          <StudySessionsView
+            subjects={subjects}
+            items={studySessions.filter(
+              (item) =>
+                subjects.includes(item.subject)
+            )}
+            setItems={setStudySessions}
+            onAddMinutes={(minutes) =>
+              setStudyHours((hours) => [
+                ...hours.slice(0, 6),
+                Number(
+                  (
+                    hours[6] +
+                    minutes / 60
+                  ).toFixed(1)
+                ),
+              ])
+            }
+            onDeleteMinutes={(minutes) =>
+              setStudyHours((hours) => [
+                ...hours.slice(0, 6),
+                Math.max(
+                  0,
+                  Number(
+                    (
+                      hours[6] -
+                      minutes / 60
+                    ).toFixed(1)
+                  )
+                ),
+              ])
+            }
+            onSave={saveProgress}
+            saveStatus={saveStatus}
+          />
+        )}
+
+        {view === "Goals" && (
+          <GoalsView
+            items={goals}
+            setItems={setGoals}
+            onSave={saveProgress}
+            saveStatus={saveStatus}
+          />
+        )}
+
+        {view === "Test Series" && (
+          <TestsView
+            subjects={subjects}
+            items={tests.filter(
+              (item) =>
+                subjects.includes(item.subject)
+            )}
+            setItems={setTests}
+            onSave={saveProgress}
+            saveStatus={saveStatus}
+          />
+        )}
+
+        {view === "Calendar" && (
+          <CalendarView
+            items={calendarItems}
+            setItems={setCalendarItems}
+            onSave={saveProgress}
+            saveStatus={saveStatus}
+          />
+        )}
+
+        {view === "Notes" && (
+          <NotesView
+            items={notes}
+            setItems={setNotes}
+            onSave={saveProgress}
+            saveStatus={saveStatus}
+          />
+        )}
+
+        {view ===
+          "Settings" && (
+          <SettingsView
+            email={
+              email
+            }
+            signedIn={Boolean(userId)}
+            isAdmin={isAdmin}
+            courseLevel={courseLevel}
+            courseGroup={courseGroup}
+            onCourseChange={applyCourseSelection}
+            onSignIn={onRequireAuth}
+            onLogout={
+              onLogout
+            }
+          />
+        )}
+      </section>
+    </main>
+  );
+}
+
+/* =========================================================
+   DASHBOARD
+========================================================= */
+
+function Dashboard({
+  courseLevel,
+  courseGroup,
+  subjects,
+  overall,
+  counts,
+  total,
+  subjectStats,
+  activities,
+  studyHours,
+  onSubjects,
+  onQuickStudy,
+  onQuickTest,
+  onQuickGoal,
+  onQuickCalendar,
+  onViewAll,
+}: any) {
+  const recent =
+    activities.slice(0, 4);
+
+  return (
+    <>
+      <div className="dashboard-head">
+        <div className="exam-card">
+          <CalendarDays
+            size={28}
+          />
+
+          <div>
+            <small>
+              CA {String(courseLevel).toUpperCase()}
+              {courseLevel !== "Foundation"
+                ? ` · ${String(courseGroup).toUpperCase()}`
+                : ""}
+            </small>
+
+            <div className="countdown">
+              <b>
+                152
+                <span>
+                  Days
+                </span>
+              </b>
+
+              <b>
+                12
+                <span>
+                  Hours
+                </span>
+              </b>
+
+              <b>
+                36
+                <span>
+                  Mins
+                </span>
+              </b>
+
+              <b>
+                25
+                <span>
+                  Secs
+                </span>
+              </b>
+            </div>
+          </div>
+        </div>
+
+        <div className="streak-card">
+          <div className="flame">
+            <Flame
+              size={31}
+            />
+          </div>
+
+          <div>
+            <small>
+              Daily Streak
+            </small>
+
+            <b>
+              0{" "}
+              <span>
+                days
+              </span>
+            </b>
+
+            <p>
+              Complete a chapter to begin
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="dashboard-grid top-grid">
+        <section className="panel overall-card">
+          <h3>
+            Overall Progress
+          </h3>
+
+          <div className="overall-body">
+            <ProgressRing
+              value={
+                overall
+              }
+            />
+
+            <div className="metric-list">
+              <Metric
+                icon={
+                  <BookOpen
+                    size={16}
+                  />
+                }
+                label="Total Chapters"
+                value={
+                  total
+                }
+              />
+
+              <Metric
+                icon={
+                  <Check
+                    size={16}
+                  />
+                }
+                label="Completed"
+                value={
+                  counts.done
+                }
+              />
+
+              <Metric
+                icon={
+                  <NotebookPen
+                    size={16}
+                  />
+                }
+                label="1st Revision"
+                value={
+                  counts.revision1
+                }
+              />
+
+              <Metric
+                icon={
+                  <NotebookPen
+                    size={16}
+                  />
+                }
+                label="2nd Revision"
+                value={
+                  counts.revision2
+                }
+              />
+
+              <Metric
+                icon={
+                  <ClipboardCheck
+                    size={16}
+                  />
+                }
+                label="Test 1"
+                value={
+                  counts.testDone
+                }
+              />
+
+              <Metric
+                icon={
+                  <ClipboardCheck
+                    size={16}
+                  />
+                }
+                label="Test 2"
+                value={
+                  counts.test2Done
+                }
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="panel activity-progress">
+          <h3>
+            Progress by Activity
+          </h3>
+
+          {stages.map(
+            (stage) => (
+              <ProgressLine
+                key={
+                  stage.key
+                }
+                label={
+                  stage.label
+                }
+                value={
+                  total
+                    ? Math.round(
+                        (
+                          counts[
+                            stage.key
+                          ] /
+                          total
+                        ) *
+                          100
+                      )
+                    : 0
+                }
+              />
+            )
+          )}
+        </section>
+
+        <section className="panel study-card">
+          <h3>
+            Study This Week
+          </h3>
+
+          <div className="study-total">
+            {studyHours
+              .reduce(
+                (
+                  a: number,
+                  b: number
+                ) =>
+                  a + b,
+                0
+              )
+              .toFixed(1)}
+            h
+
+            <small>
+              Total Study Time
+            </small>
+          </div>
+
+          <MiniLine
+            data={
+              studyHours
+            }
+          />
+        </section>
+      </div>
+
+      <div className="dashboard-grid lower-grid">
+        <section className="panel subject-panel">
+          <div className="panel-heading">
+            <h3>
+              Subject Progress
+            </h3>
+
+            <button
+              onClick={
+                onSubjects
+              }
+            >
+              View All
+            </button>
+          </div>
+
+          {subjects.map(
+            (
+              subject: SubjectName
+            ) => (
+              <SubjectRow
+                key={
+                  subject
+                }
+                subject={
+                  subject
+                }
+                stats={
+                  subjectStats(
+                    subject
+                  )
+                }
+                onClick={
+                  onSubjects
+                }
+              />
+            )
+          )}
+        </section>
+
+        <section className="panel recent-panel">
+          <div className="panel-heading">
+            <h3>
+              Recent Activity
+            </h3>
+
+            <button
+              onClick={
+                onViewAll
+              }
+            >
+              View All
+            </button>
+          </div>
+
+          {recent.length
+            ? recent.map(
+                (
+                  item: ActivityItem
+                ) => (
+                  <RecentRow
+                    key={
+                      item.id
+                    }
+                    item={
+                      item
+                    }
+                  />
+                )
+              )
+            : (
+              <div className="dashboard-empty">
+                No saved activity yet.
+              </div>
+            )}
+        </section>
+
+        <section className="panel quick-panel">
+          <h3>
+            Quick Actions
+          </h3>
+
+          <div className="quick-grid">
+            <button
+              onClick={
+                onQuickStudy
+              }
+            >
+              <Clock3 />
+
+              <span>
+                Start Study Session
+              </span>
+            </button>
+
+            <button
+              onClick={
+                onQuickTest
+              }
+            >
+              <ClipboardCheck />
+
+              <span>
+                Take a Test
+              </span>
+            </button>
+
+            <button
+              onClick={
+                onQuickGoal
+              }
+            >
+              <Goal />
+
+              <span>
+                Add Goal
+              </span>
+            </button>
+
+            <button
+              onClick={
+                onQuickCalendar
+              }
+            >
+              <CalendarDays />
+
+              <span>
+                View Calendar
+              </span>
+            </button>
+          </div>
+        </section>
+      </div>
+    </>
+  );
+}
+
+/* =========================================================
+   SUBJECTS
+========================================================= */
+
+function SubjectsView({
+  subjects,
+  subjectStats,
+  onOpen,
+}: {
+  subjects: SubjectName[];
+  subjectStats: (
+    subject: SubjectName
+  ) => {
+    total: number;
+    done: number;
+    percent: number;
+  };
+  onOpen: (
+    subject: SubjectName
+  ) => void;
+}) {
+  return (
+    <section className="single-page">
+      <div className="page-heading">
+        <div>
+          <h2>
+            Subjects
+          </h2>
+
+          <p>
+            Track your progress
+            subject-wise.
+          </p>
+        </div>
+
+        <button className="search-lite">
+          <Search
+            size={15}
+          />
+
+          Search subjects
+        </button>
+      </div>
+
+      <div className="subject-list-full">
+        {subjects.map(
+          (subject) => (
+            <SubjectRow
+              key={
+                subject
+              }
+              subject={
+                subject
+              }
+              stats={
+                subjectStats(
+                  subject
+                )
+              }
+              onClick={() =>
+                onOpen(
+                  subject
+                )
+              }
+            />
+          )
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* =========================================================
+   CHAPTERS
+========================================================= */
+
+function ChaptersView({
+  subjects,
+  activeSubject,
+  setActiveSubject,
+  search,
+  setSearch,
+  progress,
+  toggle,
+  subjectStats,
+  onSaveProgress,
+  saveStatus,
+  onBack,
+}: {
+  subjects: SubjectName[];
+  activeSubject: SubjectName;
+  setActiveSubject: (
+    subject: SubjectName
+  ) => void;
+  search: string;
+  setSearch: (
+    value: string
+  ) => void;
+  progress: Progress;
+  toggle: (
+    subject: SubjectName,
+    chapter: string,
+    stage: Stage
+  ) => void;
+  subjectStats: (
+    subject: SubjectName
+  ) => {
+    total: number;
+    done: number;
+    percent: number;
+  };
+  onSaveProgress: () => void;
+  saveStatus: "idle" | "saving" | "saved" | "error";
+  onBack: () => void;
+}) {
+  const rows =
+    syllabus[
+      activeSubject
+    ].filter(
+      (chapter) =>
+        chapter
+          .toLowerCase()
+          .includes(
+            search.toLowerCase()
+          )
+    );
+
+  const stats =
+    subjectStats(
+      activeSubject
+    );
+
+  return (
+    <section className="chapters-page">
+      <div className="chapter-top">
+        <div>
+          <button
+            className="back-link"
+            onClick={onBack}
+          >
+            ‹ Back to Subjects
+          </button>
+
+          <h2>
+            {
+              subjectMeta[
+                activeSubject
+              ].short
+            }
+          </h2>
+
+          <div className="chapter-progress">
+            <span
+              style={{
+                width:
+                  `${stats.percent}%`,
+              }}
+            />
+
+            <b>
+              {stats.percent}%
+            </b>
+          </div>
+        </div>
+
+        <select
+          value={
+            activeSubject
+          }
+          onChange={(event) => {
+            const subject =
+              event.target
+                .value as SubjectName;
+
+            setActiveSubject(
+              subject
+            );
+
+            window.localStorage.setItem(
+              "ca-progress-subject",
+              subject
+            );
+          }}
+        >
+          {subjects.map(
+            (subject) => (
+              <option
+                key={
+                  subject
+                }
+              >
+                {subject}
+              </option>
+            )
+          )}
+        </select>
+      </div>
+
+      <div className="chapter-toolbar">
+        <div className="chapter-toolbar-copy">
+          <strong>
+            {rows.length} Chapters
+          </strong>
+
+          <span>
+            Complete each stage in order,
+            then save your changes.
+          </span>
+        </div>
+
+        <div className="chapter-toolbar-actions">
+          <label>
+            <Search
+              size={16}
+            />
+
+            <input
+              value={
+                search
+              }
+              onChange={(
+                event
+              ) =>
+                setSearch(
+                  event.target
+                    .value
+                )
+              }
+              placeholder="Search chapters"
+            />
+          </label>
+
+          <button
+            type="button"
+            className={`chapter-save-button ${saveStatus}`}
+            onClick={onSaveProgress}
+            disabled={
+              saveStatus ===
+              "saving"
+            }
+          >
+            <Save size={15} />
+
+            {saveStatus ===
+            "saving"
+              ? "Saving..."
+              : saveStatus ===
+                "saved"
+                ? "Saved ✓"
+                : saveStatus ===
+                  "error"
+                  ? "Try Again"
+                  : "Save Progress"}
+          </button>
+        </div>
+      </div>
+
+      <div className="chapter-table">
+        <div className="chapter-head">
+          <span>
+            # &nbsp; Chapter Name
+          </span>
+
+          {stages.map(
+            (stage) => (
+              <span
+                key={
+                  stage.key
+                }
+              >
+                {stage.short}
+              </span>
+            )
+          )}
+        </div>
+
+        {rows.map(
+          (
+            chapter,
+            index
+          ) => {
+            const key =
+              keyFor(
+                activeSubject,
+                chapter
+              );
+
+            return (
+              <div
+                className="chapter-row"
+                key={key}
+              >
+                <span className="chapter-name">
+                  <b>
+                    {index + 1}
+                  </b>
+
+                  {chapter}
+                </span>
+
+                {stages.map(
+                  (stage) => {
+                    const checked =
+                      Boolean(
+                        progress[
+                          key
+                        ]?.[
+                          stage.key
+                        ]
+                      );
+
+                    const prerequisite =
+                      stagePrerequisites[
+                        stage.key
+                      ];
+
+                    const disabled =
+                      Boolean(
+                        prerequisite &&
+                          !progress[
+                            key
+                          ]?.[
+                            prerequisite
+                          ]
+                      );
+
+                    return (
+                      <span
+                        key={
+                          stage.key
+                        }
+                        className="stage-cell"
+                      >
+                        <button
+                          type="button"
+                          disabled={
+                            disabled
+                          }
+                          className={
+                            checked
+                              ? "stage-toggle checked"
+                              : "stage-toggle"
+                          }
+                          onClick={() =>
+                            toggle(
+                              activeSubject,
+                              chapter,
+                              stage.key
+                            )
+                          }
+                          title={
+                            disabled
+                              ? "Complete the previous stage first"
+                              : stage.label
+                          }
+                        >
+                          {checked && (
+                            <Check
+                              size={14}
+                            />
+                          )}
+                        </button>
+                      </span>
+                    );
+                  }
+                )}
+              </div>
+            );
+          }
+        )}
+
+        {!rows.length && (
+          <div className="chapter-empty">
+            No chapters found.
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+/* =========================================================
+   ANALYTICS
+========================================================= */
+
+function AnalyticsView({
+  overall,
+  counts,
+  total,
+  subjects,
+  subjectStats,
+  studyHours,
+}: any) {
+  const totalHours =
+    studyHours.reduce(
+      (
+        a: number,
+        b: number
+      ) => a + b,
+      0
+    );
+
+  return (
+    <section className="analytics-page">
+      <div className="page-heading">
+        <div>
+          <h2>
+            Analytics
+          </h2>
+
+          <p>
+            Detailed insights into
+            your preparation.
+          </p>
+        </div>
+
+        <button className="select-btn">
+          This Week⌄
+        </button>
+      </div>
+
+      <div className="analytics-stats">
+        <Metric
+          icon={
+            <Clock3 />
+          }
+          label="Study Time"
+          value={`${totalHours.toFixed(
+            1
+          )}h`}
+        />
+
+        <Metric
+          icon={
+            <Activity />
+          }
+          label="Study Sessions"
+          value="7"
+        />
+
+        <Metric
+          icon={
+            <Clock3 />
+          }
+          label="Daily Average"
+          value={`${(
+            totalHours / 7
+          ).toFixed(1)}h`}
+        />
+
+        <Metric
+          icon={
+            <Trophy />
+          }
+          label="Goal Completion"
+          value={`${overall}%`}
+        />
+      </div>
+
+      <div className="analytics-grid">
+        <section className="panel chart-panel">
+          <h3>
+            Study Time Trend
+          </h3>
+
+          <MiniLine
+            data={
+              studyHours
+            }
+            tall
+          />
+        </section>
+
+        <section className="panel donut-panel">
+          <h3>
+            Progress by Subject
+          </h3>
+
+          <div className="donut-content">
+            <ProgressRing
+              value={
+                overall
+              }
+            />
+
+            <div>
+              {subjects.map(
+                (
+                  subject: SubjectName
+                ) => (
+                  <div
+                    className="legend-subject"
+                    key={
+                      subject
+                    }
+                  >
+                    <i
+                      style={{
+                        background:
+                          subjectMeta[
+                            subject
+                          ].color,
+                      }}
+                    />
+
+                    <span>
+                      {
+                        subjectMeta[
+                          subject
+                        ].short
+                      }
+                    </span>
+
+                    <b>
+                      {
+                        subjectStats(
+                          subject
+                        ).percent
+                      }
+                      %
+                    </b>
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section className="panel analytics-progress">
+        <h3>
+          Completion Overview
+        </h3>
+
+        {stages.map(
+          (stage) => (
+            <ProgressLine
+              key={
+                stage.key
+              }
+              label={
+                stage.label
+              }
+              value={
+                total
+                  ? Math.round(
+                      (
+                        counts[
+                          stage.key
+                        ] /
+                        total
+                      ) *
+                        100
+                    )
+                  : 0
+              }
+            />
+          )
+        )}
+      </section>
+    </section>
+  );
+}
+
+/* =========================================================
+   ACTIVITY
+========================================================= */
+
+function ActivityView({
+  activities,
+}: {
+  activities: ActivityItem[];
+}) {
+  return (
+    <section className="single-page">
+      <div className="page-heading">
+        <div>
+          <h2>
+            Activity
+          </h2>
+
+          <p>
+            A history of your completed
+            study milestones.
+          </p>
+        </div>
+      </div>
+
+      <section className="panel activity-full">
+        {activities.length ? (
+          activities.map(
+            (item) => (
+              <RecentRow
+                key={
+                  item.id
+                }
+                item={
+                  item
+                }
+              />
+            )
+          )
+        ) : (
+          <div className="empty">
+            <Activity
+              size={28}
+            />
+
+            <h3>
+              No activity yet
+            </h3>
+
+            <p>
+              Mark a chapter,
+              revision, or test
+              complete to see it here.
+            </p>
+          </div>
+        )}
+      </section>
+    </section>
+  );
+}
+
+/* =========================================================
+   PERSONALISED WORKSPACE PAGES
+========================================================= */
+
+function WorkspaceHeader({
+  title,
+  text,
+  onSave,
+  saveStatus,
+}: {
+  title: string;
+  text: string;
+  onSave: () => void;
+  saveStatus: SaveStatus;
+}) {
+  return (
+    <div className="page-heading workspace-heading">
+      <div>
+        <h2>
+          {title}
+        </h2>
+
+        <p>
+          {text}
+        </p>
+      </div>
+
+      <button
+        className={`workspace-save ${saveStatus}`}
+        onClick={onSave}
+        disabled={
+          saveStatus ===
+          "saving"
+        }
+      >
+        {saveStatus ===
+        "saving"
+          ? "Saving..."
+          : saveStatus ===
+            "saved"
+            ? "Saved ✓"
+            : saveStatus ===
+              "error"
+              ? "Try Again"
+              : "Save Changes"}
+      </button>
+    </div>
+  );
+}
+
+function StudySessionsView({
+  subjects,
+  items,
+  setItems,
+  onAddMinutes,
+  onDeleteMinutes,
+  onSave,
+  saveStatus,
+}: {
+  subjects: SubjectName[];
+  items: StudySessionItem[];
+  setItems: Dispatch<
+    SetStateAction<
+      StudySessionItem[]
+    >
+  >;
+  onAddMinutes: (
+    minutes: number
+  ) => void;
+  onDeleteMinutes: (
+    minutes: number
+  ) => void;
+  onSave: () => void;
+  saveStatus: SaveStatus;
+}) {
+  const [
+    subject,
+    setSubject,
+  ] = useState<SubjectName>(
+    subjects[0]
+  );
+
+  const [
+    minutes,
+    setMinutes,
+  ] = useState("30");
+
+  useEffect(() => {
+    if (!subjects.includes(subject)) {
+      setSubject(subjects[0]);
+    }
+  }, [subject, subjects]);
+
+  const add = (
+    event: FormEvent
+  ) => {
+    event.preventDefault();
+
+    const value =
+      Number(minutes);
+
+    if (
+      !value ||
+      value < 1
+    ) {
+      return;
+    }
+
+    setItems(
+      (current) => [
+        {
+          id:
+            crypto.randomUUID(),
+          subject,
+          minutes:
+            value,
+          date:
+            new Date()
+              .toISOString(),
+        },
+        ...current,
+      ]
+    );
+
+    onAddMinutes(
+      value
+    );
+
+    setMinutes(
+      "30"
+    );
+  };
+
+  const total =
+    items.reduce(
+      (
+        sum,
+        item
+      ) =>
+        sum +
+        item.minutes,
+      0
+    );
+
+  return (
+    <section className="single-page workspace-page">
+      <WorkspaceHeader
+        title="Study Sessions"
+        text="Log focused study time by subject."
+        onSave={
+          onSave
+        }
+        saveStatus={
+          saveStatus
+        }
+      />
+
+      <div className="workspace-summary">
+        <b>
+          {Math.floor(
+            total / 60
+          )}
+          h{" "}
+          {total % 60}
+          m
+        </b>
+
+        <span>
+          Total focused time
+        </span>
+      </div>
+
+      <form
+        className="workspace-form panel"
+        onSubmit={add}
+      >
+        <select
+          value={
+            subject
+          }
+          onChange={(
+            event
+          ) =>
+            setSubject(
+              event.target
+                .value as SubjectName
+            )
+          }
+        >
+          {subjects.map(
+            (item) => (
+              <option
+                key={
+                  item
+                }
+              >
+                {item}
+              </option>
+            )
+          )}
+        </select>
+
+        <input
+          type="number"
+          min="1"
+          max="1440"
+          value={
+            minutes
+          }
+          onChange={(
+            event
+          ) =>
+            setMinutes(
+              event.target
+                .value
+            )
+          }
+          placeholder="Minutes"
+          required
+        />
+
+        <button
+          type="submit"
+        >
+          <Plus
+            size={16}
+          />
+
+          Add Session
+        </button>
+      </form>
+
+      <WorkspaceList
+        empty="No study sessions logged yet."
+      >
+        {items.map(
+          (item) => (
+            <WorkspaceRow
+              key={
+                item.id
+              }
+              title={
+                item.subject
+              }
+              meta={`${item.minutes} minutes • ${new Date(
+                item.date
+              ).toLocaleDateString()}`}
+              onDelete={() => {
+                setItems(
+                  (all) =>
+                    all.filter(
+                      (entry) =>
+                        entry.id !==
+                        item.id
+                    )
+                );
+
+                onDeleteMinutes(
+                  item.minutes
+                );
+              }}
+            />
+          )
+        )}
+      </WorkspaceList>
+    </section>
+  );
+}
+
+function GoalsView({
+  items,
+  setItems,
+  onSave,
+  saveStatus,
+}: {
+  items: GoalItem[];
+  setItems: Dispatch<
+    SetStateAction<
+      GoalItem[]
+    >
+  >;
+  onSave: () => void;
+  saveStatus: SaveStatus;
+}) {
+  const [
+    title,
+    setTitle,
+  ] = useState("");
+
+  const [
+    dueDate,
+    setDueDate,
+  ] = useState("");
+
+  const add = (
+    event: FormEvent
+  ) => {
+    event.preventDefault();
+
+    if (
+      !title.trim()
+    ) {
+      return;
+    }
+
+    setItems(
+      (all) => [
+        {
+          id:
+            crypto.randomUUID(),
+          title:
+            title.trim(),
+          dueDate,
+          completed:
+            false,
+        },
+        ...all,
+      ]
+    );
+
+    setTitle("");
+    setDueDate("");
+  };
+
+  return (
+    <section className="single-page workspace-page">
+      <WorkspaceHeader
+        title="Goals"
+        text="Set clear preparation targets and mark them complete."
+        onSave={
+          onSave
+        }
+        saveStatus={
+          saveStatus
+        }
+      />
+
+      <form
+        className="workspace-form panel"
+        onSubmit={add}
+      >
+        <input
+          value={
+            title
+          }
+          onChange={(
+            event
+          ) =>
+            setTitle(
+              event.target
+                .value
+            )
+          }
+          placeholder="Goal title"
+          required
+        />
+
+        <input
+          type="date"
+          value={
+            dueDate
+          }
+          onChange={(
+            event
+          ) =>
+            setDueDate(
+              event.target
+                .value
+            )
+          }
+        />
+
+        <button
+          type="submit"
+        >
+          <Plus
+            size={16}
+          />
+
+          Add Goal
+        </button>
+      </form>
+
+      <WorkspaceList
+        empty="No goals added yet."
+      >
+        {items.map(
+          (item) => (
+            <div
+              className={`workspace-row ${
+                item.completed
+                  ? "complete"
+                  : ""
+              }`}
+              key={
+                item.id
+              }
+            >
+              <button
+                className="workspace-check"
+                onClick={() =>
+                  setItems(
+                    (all) =>
+                      all.map(
+                        (
+                          goal
+                        ) =>
+                          goal.id ===
+                          item.id
+                            ? {
+                                ...goal,
+                                completed:
+                                  !goal.completed,
+                              }
+                            : goal
+                      )
+                  )
+                }
+              >
+                {item.completed ? (
+                  <Check
+                    size={14}
+                  />
+                ) : null}
+              </button>
+
+              <div>
+                <b>
+                  {item.title}
+                </b>
+
+                <span>
+                  {item.dueDate
+                    ? `Due ${new Date(
+                        `${item.dueDate}T00:00:00`
+                      ).toLocaleDateString()}`
+                    : "No due date"}
+                </span>
+              </div>
+
+              <button
+                className="workspace-delete"
+                onClick={() =>
+                  setItems(
+                    (all) =>
+                      all.filter(
+                        (
+                          goal
+                        ) =>
+                          goal.id !==
+                          item.id
+                      )
+                  )
+                }
+              >
+                Delete
+              </button>
+            </div>
+          )
+        )}
+      </WorkspaceList>
+    </section>
+  );
+}
+
+function TestsView({
+  subjects,
+  items,
+  setItems,
+  onSave,
+  saveStatus,
+}: {
+  subjects: SubjectName[];
+  items: TestItem[];
+  setItems: Dispatch<
+    SetStateAction<
+      TestItem[]
+    >
+  >;
+  onSave: () => void;
+  saveStatus: SaveStatus;
+}) {
+  const [
+    subject,
+    setSubject,
+  ] = useState<SubjectName>(
+    subjects[0]
+  );
+
+  const [
+    score,
+    setScore,
+  ] = useState("");
+
+  const [
+    maxScore,
+    setMaxScore,
+  ] = useState("100");
+
+  useEffect(() => {
+    if (!subjects.includes(subject)) {
+      setSubject(subjects[0]);
+    }
+  }, [subject, subjects]);
+
+  const add = (
+    event: FormEvent
+  ) => {
+    event.preventDefault();
+
+    const scored =
+      Number(score);
+
+    const maximum =
+      Number(maxScore);
+
+    if (
+      scored < 0 ||
+      maximum < 1 ||
+      scored > maximum
+    ) {
+      return;
+    }
+
+    setItems(
+      (all) => [
+        {
+          id:
+            crypto.randomUUID(),
+          subject,
+          score:
+            scored,
+          maxScore:
+            maximum,
+          date:
+            new Date()
+              .toISOString(),
+        },
+        ...all,
+      ]
+    );
+
+    setScore("");
+  };
+
+  return (
+    <section className="single-page workspace-page">
+      <WorkspaceHeader
+        title="Test Series"
+        text="Record mock-test scores and monitor improvement."
+        onSave={
+          onSave
+        }
+        saveStatus={
+          saveStatus
+        }
+      />
+
+      <form
+        className="workspace-form panel"
+        onSubmit={add}
+      >
+        <select
+          value={
+            subject
+          }
+          onChange={(
+            event
+          ) =>
+            setSubject(
+              event.target
+                .value as SubjectName
+            )
+          }
+        >
+          {subjects.map(
+            (item) => (
+              <option
+                key={
+                  item
+                }
+              >
+                {item}
+              </option>
+            )
+          )}
+        </select>
+
+        <input
+          type="number"
+          min="0"
+          value={
+            score
+          }
+          onChange={(
+            event
+          ) =>
+            setScore(
+              event.target
+                .value
+            )
+          }
+          placeholder="Score"
+          required
+        />
+
+        <input
+          type="number"
+          min="1"
+          value={
+            maxScore
+          }
+          onChange={(
+            event
+          ) =>
+            setMaxScore(
+              event.target
+                .value
+            )
+          }
+          placeholder="Out of"
+          required
+        />
+
+        <button
+          type="submit"
+        >
+          <Plus
+            size={16}
+          />
+
+          Add Result
+        </button>
+      </form>
+
+      <WorkspaceList
+        empty="No test results recorded yet."
+      >
+        {items.map(
+          (item) => (
+            <WorkspaceRow
+              key={
+                item.id
+              }
+              title={
+                item.subject
+              }
+              meta={`${item.score}/${item.maxScore} • ${Math.round(
+                (
+                  item.score /
+                  item.maxScore
+                ) *
+                  100
+              )}% • ${new Date(
+                item.date
+              ).toLocaleDateString()}`}
+              onDelete={() =>
+                setItems(
+                  (all) =>
+                    all.filter(
+                      (entry) =>
+                        entry.id !==
+                        item.id
+                    )
+                )
+              }
+            />
+          )
+        )}
+      </WorkspaceList>
+    </section>
+  );
+}
+
+function CalendarView({
+  items,
+  setItems,
+  onSave,
+  saveStatus,
+}: {
+  items: CalendarItem[];
+  setItems: Dispatch<
+    SetStateAction<
+      CalendarItem[]
+    >
+  >;
+  onSave: () => void;
+  saveStatus: SaveStatus;
+}) {
+  const [
+    title,
+    setTitle,
+  ] = useState("");
+
+  const [
+    date,
+    setDate,
+  ] = useState("");
+
+  const add = (
+    event: FormEvent
+  ) => {
+    event.preventDefault();
+
+    if (
+      !title.trim() ||
+      !date
+    ) {
+      return;
+    }
+
+    setItems(
+      (all) =>
+        [
+          ...all,
+          {
+            id:
+              crypto.randomUUID(),
+            title:
+              title.trim(),
+            date,
+          },
+        ].sort(
+          (a, b) =>
+            a.date.localeCompare(
+              b.date
+            )
+        )
+    );
+
+    setTitle("");
+    setDate("");
+  };
+
+  return (
+    <section className="single-page workspace-page">
+      <WorkspaceHeader
+        title="Calendar"
+        text="Schedule tests, revision days and study deadlines."
+        onSave={
+          onSave
+        }
+        saveStatus={
+          saveStatus
+        }
+      />
+
+      <form
+        className="workspace-form panel"
+        onSubmit={add}
+      >
+        <input
+          value={
+            title
+          }
+          onChange={(
+            event
+          ) =>
+            setTitle(
+              event.target
+                .value
+            )
+          }
+          placeholder="Event title"
+          required
+        />
+
+        <input
+          type="date"
+          value={
+            date
+          }
+          onChange={(
+            event
+          ) =>
+            setDate(
+              event.target
+                .value
+            )
+          }
+          required
+        />
+
+        <button
+          type="submit"
+        >
+          <Plus
+            size={16}
+          />
+
+          Add Event
+        </button>
+      </form>
+
+      <WorkspaceList
+        empty="No calendar events yet."
+      >
+        {items.map(
+          (item) => (
+            <WorkspaceRow
+              key={
+                item.id
+              }
+              title={
+                item.title
+              }
+              meta={
+                new Date(
+                  `${item.date}T00:00:00`
+                ).toLocaleDateString(
+                  undefined,
+                  {
+                    day:
+                      "numeric",
+                    month:
+                      "long",
+                    year:
+                      "numeric",
+                  }
+                )
+              }
+              onDelete={() =>
+                setItems(
+                  (all) =>
+                    all.filter(
+                      (entry) =>
+                        entry.id !==
+                        item.id
+                    )
+                )
+              }
+            />
+          )
+        )}
+      </WorkspaceList>
+    </section>
+  );
+}
+
+function NotesView({
+  items,
+  setItems,
+  onSave,
+  saveStatus,
+}: {
+  items: NoteItem[];
+  setItems: Dispatch<
+    SetStateAction<
+      NoteItem[]
+    >
+  >;
+  onSave: () => void;
+  saveStatus: SaveStatus;
+}) {
+  const [
+    title,
+    setTitle,
+  ] = useState("");
+
+  const [
+    body,
+    setBody,
+  ] = useState("");
+
+  const add = (
+    event: FormEvent
+  ) => {
+    event.preventDefault();
+
+    if (
+      !title.trim() ||
+      !body.trim()
+    ) {
+      return;
+    }
+
+    setItems(
+      (all) => [
+        {
+          id:
+            crypto.randomUUID(),
+          title:
+            title.trim(),
+          body:
+            body.trim(),
+          updatedAt:
+            new Date()
+              .toISOString(),
+        },
+        ...all,
+      ]
+    );
+
+    setTitle("");
+    setBody("");
+  };
+
+  return (
+    <section className="single-page workspace-page">
+      <WorkspaceHeader
+        title="Notes"
+        text="Keep concise preparation notes synced to your account."
+        onSave={
+          onSave
+        }
+        saveStatus={
+          saveStatus
+        }
+      />
+
+      <form
+        className="workspace-form notes-form panel"
+        onSubmit={add}
+      >
+        <input
+          value={
+            title
+          }
+          onChange={(
+            event
+          ) =>
+            setTitle(
+              event.target
+                .value
+            )
+          }
+          placeholder="Note title"
+          required
+        />
+
+        <textarea
+          value={
+            body
+          }
+          onChange={(
+            event
+          ) =>
+            setBody(
+              event.target
+                .value
+            )
+          }
+          placeholder="Write your note..."
+          required
+        />
+
+        <button
+          type="submit"
+        >
+          <Plus
+            size={16}
+          />
+
+          Add Note
+        </button>
+      </form>
+
+      <div className="notes-grid">
+        {items.length ? (
+          items.map(
+            (item) => (
+              <article
+                className="note-card panel"
+                key={
+                  item.id
+                }
+              >
+                <h3>
+                  {item.title}
+                </h3>
+
+                <p>
+                  {item.body}
+                </p>
+
+                <footer>
+                  <span>
+                    {new Date(
+                      item.updatedAt
+                    ).toLocaleDateString()}
+                  </span>
+
+                  <button
+                    onClick={() =>
+                      setItems(
+                        (all) =>
+                          all.filter(
+                            (
+                              entry
+                            ) =>
+                              entry.id !==
+                              item.id
+                          )
+                      )
+                    }
+                  >
+                    Delete
+                  </button>
+                </footer>
+              </article>
+            )
+          )
+        ) : (
+          <div className="workspace-empty panel">
+            No notes created yet.
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function WorkspaceList({
+  children,
+  empty,
+}: {
+  children: ReactNode;
+  empty: string;
+}) {
+  const hasItems =
+    Array.isArray(
+      children
+    )
+      ? children.length > 0
+      : Boolean(
+          children
+        );
+
+  return (
+    <section className="workspace-list panel">
+      {hasItems ? (
+        children
+      ) : (
+        <div className="workspace-empty">
+          {empty}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function WorkspaceRow({
+  title,
+  meta,
+  onDelete,
+}: {
+  title: string;
+  meta: string;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="workspace-row">
+      <div>
+        <b>
+          {title}
+        </b>
+
+        <span>
+          {meta}
+        </span>
+      </div>
+
+      <button
+        className="workspace-delete"
+        onClick={onDelete}
+      >
+        Delete
+      </button>
+    </div>
+  );
+}
+
+/* =========================================================
+   SETTINGS
+========================================================= */
+
+function SettingsView({
+  email,
+  signedIn,
+  isAdmin,
+  courseLevel,
+  courseGroup,
+  onCourseChange,
+  onSignIn,
+  onLogout,
+}: {
+  email: string;
+  signedIn: boolean;
+  isAdmin: boolean;
+  courseLevel: CourseLevel;
+  courseGroup: CourseGroup;
+  onCourseChange: (
+    level: CourseLevel,
+    group: CourseGroup
+  ) => void;
+  onSignIn: () => void;
+  onLogout: () => void;
+}) {
+  const [selectedLevel, setSelectedLevel] =
+    useState<CourseLevel>(courseLevel);
+  const [selectedGroup, setSelectedGroup] =
+    useState<CourseGroup>(courseGroup);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setSelectedLevel(courseLevel);
+    setSelectedGroup(courseGroup);
+  }, [courseGroup, courseLevel]);
+
+  const saveCourse = () => {
+    onCourseChange(
+      selectedLevel,
+      selectedLevel === "Foundation"
+        ? "Both"
+        : selectedGroup
+    );
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 1800);
+  };
+
+  const accountName = email || "Guest account";
+
+  return (
+    <section className="single-page settings-page">
+      <div className="page-heading">
+        <div>
+          <h2>
+            Settings
+          </h2>
+
+          <p>
+            Manage your course, account and data preferences.
+          </p>
+        </div>
+      </div>
+
+      <div className="settings-layout">
+        {isAdmin && (
+          <section className="panel settings-section settings-admin-link">
+            <div className="settings-section-head">
+              <span className="settings-section-icon"><Shield size={18} /></span>
+              <div><h3>Administration</h3><p>Manage sections, plans, members, administrators and community messages.</p></div>
+            </div>
+            <button type="button" onClick={() => { window.location.href = "/admin"; }}>Open admin panel</button>
+          </section>
+        )}
+        <section className="panel settings-section course-settings">
+          <div className="settings-section-head">
+            <span className="settings-section-icon">
+              <BookOpen size={18} />
+            </span>
+
+            <div>
+              <h3>Course preferences</h3>
+              <p>Choose the syllabus and papers shown throughout your dashboard.</p>
+            </div>
+          </div>
+
+          <div className="settings-level-grid">
+            {(["Foundation", "Intermediate", "Final"] as CourseLevel[]).map(
+              (level) => (
+                <button
+                  type="button"
+                  key={level}
+                  className={selectedLevel === level ? "active" : ""}
+                  onClick={() => {
+                    setSelectedLevel(level);
+                    if (level === "Foundation") {
+                      setSelectedGroup("Both");
+                    }
+                    setSaved(false);
+                  }}
+                >
+                  <strong>CA {level}</strong>
+                  <span>
+                    {level === "Foundation"
+                      ? "4 papers"
+                      : "6 papers · 2 groups"}
+                  </span>
+                </button>
+              )
+            )}
+          </div>
+
+          {selectedLevel !== "Foundation" && (
+            <div className="settings-group-block">
+              <label>Paper selection</label>
+
+              <div className="settings-group-grid">
+                {(["Group 1", "Group 2", "Both"] as CourseGroup[]).map(
+                  (group) => (
+                    <button
+                      type="button"
+                      key={group}
+                      className={selectedGroup === group ? "active" : ""}
+                      onClick={() => {
+                        setSelectedGroup(group);
+                        setSaved(false);
+                      }}
+                    >
+                      <strong>{group}</strong>
+                      <span>{group === "Both" ? "All 6 papers" : "3 papers"}</span>
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="settings-save-row">
+            <span>
+              Currently showing: CA {courseLevel}
+              {courseLevel !== "Foundation" ? ` · ${courseGroup}` : ""}
+            </span>
+
+            <button type="button" onClick={saveCourse} className={saved ? "saved" : ""}>
+              <Save size={15} />
+              {saved ? "Preferences saved" : "Save preferences"}
+            </button>
+          </div>
+        </section>
+
+        <section className="panel settings-section settings-account">
+          <div className="settings-section-head">
+            <div className="settings-avatar">
+              {accountName.charAt(0).toUpperCase() || "C"}
+            </div>
+
+            <div>
+              <h3>{signedIn ? "Your account" : "Guest account"}</h3>
+              <p>
+                {signedIn
+                  ? accountName
+                  : "Browse freely. Sign in when you want to save and sync progress."}
+              </p>
+            </div>
+          </div>
+
+          <div className="settings-account-status">
+            <span className={signedIn ? "connected" : "guest"}>
+              {signedIn ? "Connected to Supabase" : "Progress sync unavailable"}
+            </span>
+
+            {signedIn ? (
+              <button className="settings-logout" onClick={onLogout}>
+                <LogOut size={16} />
+                Logout
+              </button>
+            ) : (
+              <button className="settings-signin" onClick={onSignIn}>
+                <LogIn size={16} />
+                Sign in
+              </button>
+            )}
+          </div>
+        </section>
+
+        <section className="panel settings-section settings-data">
+          <div className="settings-section-head">
+            <span className="settings-section-icon">
+              <Settings size={18} />
+            </span>
+
+            <div>
+              <h3>Data and device</h3>
+              <p>Understand where your preferences and study progress are stored.</p>
+            </div>
+          </div>
+
+          <div className="settings-data-list">
+            <div>
+              <strong>Course preference</strong>
+              <span>Remembered on this device</span>
+            </div>
+
+            <div>
+              <strong>Study progress</strong>
+              <span>{signedIn ? "Synced securely to your account" : "Not saved while browsing as guest"}</span>
+            </div>
+
+            <div>
+              <strong>Community</strong>
+              <span>{signedIn ? "Available for your selected course" : "Sign in required"}</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+/* =========================================================
+   SMALL COMPONENTS
+========================================================= */
+
+function SubjectRow({
+  subject,
+  stats,
+  onClick,
+}: {
+  subject: SubjectName;
+  stats: {
+    total: number;
+    done: number;
+    percent: number;
+  };
+  onClick: () => void;
+}) {
+  const meta =
+    subjectMeta[
+      subject
+    ];
+
+  return (
+    <button
+      className="subject-row-new"
+      onClick={
+        onClick
+      }
+    >
+      <span
+        className="subject-badge"
+        style={{
+          background:
+            meta.color,
+        }}
+      >
+        {meta.code}
+      </span>
+
+      <span className="subject-name">
+        {meta.short}
+      </span>
+
+      <span className="subject-bar">
+        <i
+          style={{
+            width:
+              `${stats.percent}%`,
+          }}
+        />
+      </span>
+
+      <b>
+        {stats.percent}%
+      </b>
+
+      <small>
+        {stats.done}/
+        {stats.total}
+      </small>
+
+      <ChevronRight
+        size={17}
+      />
+    </button>
+  );
+}
+
+function RecentRow({
+  item,
+}: {
+  item: ActivityItem;
+}) {
+  const meta =
+    subjectMeta[
+      item.subject as SubjectName
+    ];
+
+  const stage =
+    stages.find(
+      (
+        itemStage
+      ) =>
+        itemStage.key ===
+        item.stage
+    );
+
+  return (
+    <div className="recent-row">
+      <span
+        className="subject-badge"
+        style={{
+          background:
+            meta?.color ||
+            "#5b6fd6",
+        }}
+      >
+        {meta?.code ||
+          "CA"}
+      </span>
+
+      <span className="recent-copy">
+        <b>
+          {item.chapter}
+        </b>
+
+        <small>
+          {
+            stageCopy[
+              item.stage
+            ]
+          }
+        </small>
+      </span>
+
+      <span
+        className={`activity-status ${
+          item.stage
+        }`}
+      >
+        {
+          stage?.short
+        }
+      </span>
+
+      <time>
+        {item.time}
+      </time>
+    </div>
+  );
+}
+
+function Metric({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div className="metric">
+      <i>
+        {icon}
+      </i>
+
+      <span>
+        {label}
+      </span>
+
+      <b>
+        {value}
+      </b>
+    </div>
+  );
+}
+
+function ProgressLine({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="progress-line">
+      <span>
+        {label}
+      </span>
+
+      <div>
+        <i
+          style={{
+            width:
+              `${value}%`,
+          }}
+        />
+      </div>
+
+      <b>
+        {value}%
+      </b>
+    </div>
+  );
+}
+
+function ProgressRing({
+  value,
+}: {
+  value: number;
+}) {
+  return (
+    <div
+      className="progress-ring"
+      style={{
+        background:
+          `conic-gradient(
+            #2d68cf ${value}%,
+            #e9edf3 0
+          )`,
+      }}
+    >
+      <div>
+        <b>
+          {value}%
+        </b>
+
+        <span>
+          Completed
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function MiniLine({
+  data,
+  tall = false,
+}: {
+  data: number[];
+  tall?: boolean;
+}) {
+  const max =
+    Math.max(
+      ...data,
+      1
+    );
+
+  const points =
+    data
+      .map(
+        (
+          value,
+          index
+        ) =>
+          `${index *
+            (100 /
+              (data.length -
+                1))},${
+            100 -
+            (value /
+              max) *
+              75 -
+            5
+          }`
+      )
+      .join(" ");
+
+  return (
+    <div
+      className={`mini-line ${
+        tall
+          ? "tall"
+          : ""
+      }`}
+    >
+      <svg
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+      >
+        <defs>
+          <linearGradient
+            id="fill"
+            x1="0"
+            y1="0"
+            x2="0"
+            y2="1"
+          >
+            <stop
+              offset="0%"
+              stopColor="#2d68cf"
+              stopOpacity=".18"
+            />
+
+            <stop
+              offset="100%"
+              stopColor="#2d68cf"
+              stopOpacity="0"
+            />
+          </linearGradient>
+        </defs>
+
+        <polygon
+          points={`0,100 ${points} 100,100`}
+          fill="url(#fill)"
+        />
+
+        <polyline
+          points={
+            points
+          }
+          fill="none"
+          stroke="#2d68cf"
+          strokeWidth="2"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+
+      <div className="days">
+        {[
+          "Mon",
+          "Tue",
+          "Wed",
+          "Thu",
+          "Fri",
+          "Sat",
+          "Sun",
+        ].map(
+          (day) => (
+            <span
+              key={
+                day
+              }
+            >
+              {day}
+            </span>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+/* =========================================================
+   AUTH STYLES
+========================================================= */
+
+function AuthStyles() {
+  return (
+    <style>{`
+      .auth-page {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 1.05fr .95fr;
+        background: #f7f8fb;
+        font-family: Arial, sans-serif;
+      }
+
+      .auth-left {
+        min-height: 100vh;
+        padding: 42px 8vw;
+        background: radial-gradient(circle at 20% 20%, rgba(92,116,215,.15), transparent 30%), linear-gradient(135deg,#101a31,#17274b);
+        color: white;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .auth-brand { display:flex; align-items:center; gap:11px; font-size:13px; letter-spacing:2px; font-weight:700; }
+      .auth-logo { width:42px; height:42px; display:grid; place-items:center; border-radius:12px; background:#fff; color:#1b3d83; font-size:17px; font-weight:800; letter-spacing:-1px; }
+      .auth-hero { margin:auto 0; max-width:570px; }
+      .auth-badge { display:inline-flex; padding:8px 12px; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.07); border-radius:999px; font-size:11px; letter-spacing:1.3px; margin-bottom:26px; }
+      .auth-hero h1 { margin:0; font-size:clamp(42px,5vw,72px); line-height:1.02; letter-spacing:-3px; }
+      .auth-hero h1 span { color:#9fb9ff; }
+      .auth-hero > p { max-width:480px; margin:24px 0 38px; color:#b7c1d7; line-height:1.7; font-size:16px; }
+      .auth-features { display:grid; gap:17px; }
+      .auth-feature { display:flex; align-items:center; gap:14px; }
+      .auth-feature-icon { width:40px; height:40px; display:grid; place-items:center; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.1); border-radius:11px; color:#a9c0ff; }
+      .auth-feature strong,.auth-feature span { display:block; }
+      .auth-feature strong { font-size:14px; margin-bottom:3px; }
+      .auth-feature span { color:#aab6cf; font-size:13px; }
+      .auth-footer { color:#7584a3; font-size:12px; }
+
+      .auth-right { display:flex; align-items:center; justify-content:center; padding:32px; }
+      .auth-card { width:100%; max-width:430px; background:#fff; border:1px solid #e8ebf1; border-radius:22px; padding:42px; box-shadow:0 20px 70px rgba(25,38,68,.08); }
+      .auth-mobile-logo { display:none; width:46px; height:46px; place-items:center; margin:0 auto 18px; border-radius:14px; background:#edf3ff; color:#245ec2; font-size:17px; font-weight:800; }
+      .auth-card-head h2 { margin:0; color:#182033; font-size:30px; letter-spacing:-1px; }
+      .auth-card-head p { margin:9px 0 30px; color:#7c8595; line-height:1.6; font-size:14px; }
+      .auth-form { display:grid; gap:17px; }
+      .auth-form label { display:grid; gap:8px; color:#4d5564; font-size:13px; font-weight:600; }
+      .auth-form input { width:100%; box-sizing:border-box; height:48px; border:1px solid #dfe3eb; border-radius:11px; padding:0 14px; outline:none; font-size:14px; transition:.2s; }
+      .auth-form input:focus { border-color:#2d68cf; box-shadow:0 0 0 4px rgba(45,104,207,.08); }
+      .auth-form .auth-remember { display:flex; align-items:flex-start; gap:10px; cursor:pointer; }
+      .auth-form .auth-remember input { width:17px; height:17px; margin:2px 0 0; padding:0; flex:0 0 auto; accent-color:#245ec2; box-shadow:none; }
+      .auth-remember span,.auth-remember strong,.auth-remember small { display:block; }
+      .auth-remember strong { color:#3f4858; font-size:13px; }
+      .auth-remember small { margin-top:3px; color:#8a93a2; font-size:11px; font-weight:400; line-height:1.4; }
+
+      .auth-submit,.auth-google { width:100%; height:50px; border-radius:11px; cursor:pointer; font-size:14px; font-weight:700; }
+      .auth-submit { border:0; background:#245ec2; color:#fff; margin-top:4px; }
+      .auth-submit:hover { background:#1d51aa; }
+      .auth-google { border:1px solid #dfe3eb; background:#fff; color:#293244; display:flex; align-items:center; justify-content:center; gap:10px; }
+      .auth-google:hover { background:#f8f9fb; }
+      .auth-submit:disabled,.auth-google:disabled { opacity:.65; cursor:not-allowed; }
+      .auth-divider { text-align:center; color:#98a0ae; font-size:12px; }
+      .auth-method-divider { display:flex; align-items:center; gap:12px; margin:22px 0; white-space:nowrap; }
+      .auth-method-divider::before,.auth-method-divider::after { content:""; height:1px; background:#e7eaf0; flex:1; }
+      .google-mark { width:22px; height:22px; display:grid; place-items:center; border-radius:50%; background:linear-gradient(135deg,#4285f4 0 25%,#34a853 25% 50%,#fbbc05 50% 75%,#ea4335 75%); color:#fff; font-size:12px; font-weight:800; }
+      .auth-change-phone { border:0; background:transparent; color:#245ec2; font-size:12px; font-weight:700; cursor:pointer; justify-self:center; }
+      .auth-form input:disabled { background:#f4f6f9; color:#6f7887; }
+
+      .auth-switch { margin-top:25px; text-align:center; color:#778092; font-size:13px; }
+      .auth-switch button { border:0; background:none; color:#245ec2; font-weight:700; margin-left:6px; cursor:pointer; }
+      .auth-guest { width:100%; height:46px; margin-top:18px; border:1px solid #d9e1ef; border-radius:11px; background:#f7f9fd; color:#245ec2; font-size:13px; font-weight:700; cursor:pointer; }
+      .auth-guest:hover { background:#eef3fb; }
+      .auth-guest-note { margin:10px 10px 0; color:#8891a1; font-size:11px; line-height:1.5; text-align:center; }
+
+      .auth-error,.auth-success,.auth-config-warning { padding:11px 13px; border-radius:9px; font-size:12px; line-height:1.5; }
+      .auth-error { background:#fff1f1; color:#b3261e; border:1px solid #ffd7d5; }
+      .auth-success { background:#effaf3; color:#18703b; border:1px solid #ccebd6; }
+      .auth-config-warning { margin-top:20px; background:#fff8e8; color:#8a6316; }
+
+      @media (max-width:850px) {
+        .auth-page { grid-template-columns:1fr; min-height:100dvh; background:#f5f7fb; }
+        .auth-left { display:none; }
+        .auth-right { min-height:100dvh; padding:28px 18px; }
+        .auth-card { padding:30px 22px; }
+        .auth-mobile-logo { display:grid; }
+        .auth-card-head { text-align:center; }
+      }
+
+      @media (max-width:520px) {
+        .auth-right { align-items:flex-start; padding:24px 14px; }
+        .auth-card { max-width:none; padding:28px 20px; border-radius:20px; box-shadow:0 14px 45px rgba(25,38,68,.07); }
+        .auth-card-head h2 { font-size:25px; }
+        .auth-card-head p { margin-bottom:25px; font-size:13px; }
+        .auth-submit,.auth-google { height:52px; }
+      }
+    `}</style>
+  );
+}
