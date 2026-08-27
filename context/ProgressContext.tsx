@@ -74,6 +74,19 @@ export type SaveStatus =
   | "saved"
   | "error";
 
+export type AppSectionRule = {
+  section_key: string;
+  label: string;
+  route: string;
+  enabled: boolean;
+  audience: "all" | "guest" | "member";
+  minimum_plan_rank: number;
+  sort_order: number;
+  starts_at: string | null;
+  ends_at: string | null;
+  appearance: Record<string, unknown>;
+};
+
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -179,6 +192,10 @@ type ProgressContextValue = {
   dataReady: boolean;
   guestMode: boolean;
   configured: boolean;
+  planRank: number;
+  planSlug: string;
+  isAdmin: boolean;
+  sectionRules: AppSectionRule[];
 
   progress: Progress;
   setProgress: Dispatch<
@@ -295,6 +312,12 @@ export function ProgressProvider({
   const [saveStatus, setSaveStatus] =
     useState<SaveStatus>("idle");
 
+  const [planRank, setPlanRank] = useState(0);
+  const [planSlug, setPlanSlug] = useState("free");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [sectionRules, setSectionRules] =
+    useState<AppSectionRule[]>([]);
+
   const dataReadyRef =
     useRef(false);
 
@@ -339,6 +362,66 @@ export function ProgressProvider({
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+
+    const loadAccess = async () => {
+      const { data: rules } = await supabase
+        .from("app_sections")
+        .select("section_key,label,route,enabled,audience,minimum_plan_rank,sort_order,starts_at,ends_at,appearance")
+        .order("sort_order");
+
+      if (!cancelled && rules) {
+        setSectionRules(rules as AppSectionRule[]);
+      }
+
+      if (!session?.user.id) {
+        if (!cancelled) {
+          setPlanRank(0);
+          setPlanSlug("free");
+          setIsAdmin(false);
+        }
+        return;
+      }
+
+      const [{ data: subscription }, { data: admin }] =
+        await Promise.all([
+          supabase
+            .from("user_subscriptions")
+            .select("status,ends_at,plan:subscription_plans(slug,rank)")
+            .eq("user_id", session.user.id)
+            .maybeSingle(),
+          supabase
+            .from("admin_users")
+            .select("role")
+            .eq("user_id", session.user.id)
+            .maybeSingle(),
+        ]);
+
+      if (cancelled) return;
+
+      const plan = subscription?.plan as unknown as
+        | { slug: string; rank: number }
+        | null;
+      const active =
+        subscription?.status === "active" ||
+        subscription?.status === "trialing";
+      const unexpired =
+        !subscription?.ends_at ||
+        new Date(subscription.ends_at).getTime() > Date.now();
+
+      setPlanRank(active && unexpired && plan ? plan.rank : 0);
+      setPlanSlug(active && unexpired && plan ? plan.slug : "free");
+      setIsAdmin(Boolean(admin));
+    };
+
+    void loadAccess();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user.id]);
 
   /* =========================================================
      LOAD USER DATA
@@ -616,6 +699,10 @@ export function ProgressProvider({
 
         configured:
           Boolean(supabase),
+        planRank,
+        planSlug,
+        isAdmin,
+        sectionRules,
 
         progress,
         setProgress,
