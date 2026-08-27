@@ -86,6 +86,12 @@ export type AppSectionRule = {
   ends_at: string | null;
   appearance: Record<string, unknown>;
 };
+export type AppPageElement = {
+  id:string;page_key:string;element_key:string;parent_key:string|null;region:string;
+  element_type:"section"|"card"|"quick_action"|"content_block";label:string;description:string;
+  enabled:boolean;audience:"all"|"guest"|"member";minimum_plan_rank:number;sort_order:number;
+  config:Record<string,unknown>;appearance:Record<string,unknown>;
+};
 
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -196,6 +202,7 @@ type ProgressContextValue = {
   planSlug: string;
   isAdmin: boolean;
   sectionRules: AppSectionRule[];
+  pageElements: AppPageElement[];
 
   progress: Progress;
   setProgress: Dispatch<
@@ -317,6 +324,7 @@ export function ProgressProvider({
   const [isAdmin, setIsAdmin] = useState(false);
   const [sectionRules, setSectionRules] =
     useState<AppSectionRule[]>([]);
+  const [pageElements,setPageElements]=useState<AppPageElement[]>([]);
 
   const dataReadyRef =
     useRef(false);
@@ -368,14 +376,15 @@ export function ProgressProvider({
     let cancelled = false;
 
     const loadAccess = async () => {
-      const { data: rules } = await supabase
-        .from("app_sections")
-        .select("section_key,label,route,enabled,audience,minimum_plan_rank,sort_order,starts_at,ends_at,appearance")
-        .order("sort_order");
+      const [{data:rules},{data:elements}]=await Promise.all([
+        supabase.from("app_sections").select("section_key,label,route,enabled,audience,minimum_plan_rank,sort_order,starts_at,ends_at,appearance").order("sort_order"),
+        supabase.from("app_page_elements").select("*").order("sort_order")
+      ]);
 
       if (!cancelled && rules) {
         setSectionRules(rules as AppSectionRule[]);
       }
+      if(!cancelled&&elements)setPageElements(elements as AppPageElement[]);
 
       if (!session?.user.id) {
         if (!cancelled) {
@@ -703,6 +712,7 @@ export function ProgressProvider({
         planSlug,
         isAdmin,
         sectionRules,
+        pageElements,
 
         progress,
         setProgress,

@@ -117,11 +117,13 @@ begin
     raise exception 'You do not have permission to moderate this channel';
   end if;
   until_time:=now()+make_interval(hours=>duration_hours);
+  -- Permission is checked against the channel where the violation happened,
+  -- but the resulting restriction applies across every community chat.
   insert into public.chat_blocks(user_id,channel,blocked_until,reason,created_by)
-  values(target_user_id,requested_channel,until_time,coalesce(nullif(trim(block_reason),''),'Community guideline violation'),auth.uid());
+  values(target_user_id,'*',until_time,coalesce(nullif(trim(block_reason),''),'Community guideline violation'),auth.uid());
   insert into public.admin_audit_logs(actor_id,action,target_type,target_id,details)
   values(auth.uid(),'chat.user_blocked','auth_user',target_user_id::text,
-    jsonb_build_object('channel',requested_channel,'hours',duration_hours,'blocked_until',until_time));
+    jsonb_build_object('source_channel',requested_channel,'block_scope','all_chats','hours',duration_hours,'blocked_until',until_time));
   return until_time;
 end;
 $$;
@@ -152,6 +154,7 @@ before insert on public.community_messages
 for each row execute function public.enforce_community_message_rules();
 
 drop policy if exists "moderators delete community messages" on public.community_messages;
+drop policy if exists "authorised moderators delete community messages" on public.community_messages;
 create policy "authorised moderators delete community messages"
 on public.community_messages for delete
 using (public.can_moderate_channel('chat',channel));
@@ -195,4 +198,3 @@ end;
 $$;
 
 grant execute on function public.admin_list_members() to authenticated;
-
