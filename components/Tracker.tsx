@@ -347,6 +347,11 @@ export default function Tracker({
   ] = useState(false);
 
   const [
+    rememberOnDevice,
+    setRememberOnDevice,
+  ] = useState(true);
+
+  const [
     showLoginPrompt,
     setShowLoginPrompt,
   ] = useState(false);
@@ -362,17 +367,10 @@ export default function Tracker({
 
     if (session && authPage) {
       router.replace("/dashboard");
-    } else if (
-      !session &&
-      !guestMode &&
-      !authPage
-    ) {
-      router.replace("/login");
     }
   }, [
     authLoading,
     authPage,
-    guestMode,
     router,
     session,
   ]);
@@ -395,7 +393,8 @@ export default function Tracker({
         const error =
           await signIn(
             email,
-            password
+            password,
+            rememberOnDevice
           );
 
         if (error) {
@@ -437,7 +436,9 @@ export default function Tracker({
 
       try {
         const error =
-          await signInWithGoogle();
+          await signInWithGoogle(
+            rememberOnDevice
+          );
 
         if (error) {
           setAuthError(error);
@@ -527,10 +528,7 @@ export default function Tracker({
 
   if (
     !session &&
-    (
-      !guestMode ||
-      Boolean(authPage)
-    )
+    Boolean(authPage)
   ) {
     return (
       <>
@@ -659,6 +657,30 @@ export default function Tracker({
                     required
                   />
                 </label>
+
+                {authMode === "login" && (
+                  <label className="auth-remember">
+                    <input
+                      type="checkbox"
+                      checked={rememberOnDevice}
+                      onChange={(event) =>
+                        setRememberOnDevice(
+                          event.target.checked
+                        )
+                      }
+                    />
+
+                    <span>
+                      <strong>
+                        Remember on this device
+                      </strong>
+
+                      <small>
+                        Stay signed in after closing your browser.
+                      </small>
+                    </span>
+                  </label>
+                )}
 
                 {authError && (
                   <div className="auth-error">
@@ -1420,7 +1442,13 @@ function TrackerDashboard({
         />
       )}
 
-      <section className="app-content">
+      <section
+        className={`app-content ${
+          view === "Community"
+            ? "community-content"
+            : ""
+        }`}
+      >
         <header className="topbar">
           <button
             className="mobile-menu"
@@ -4249,6 +4277,11 @@ function AuthStyles() {
       .auth-form label { display:grid; gap:8px; color:#4d5564; font-size:13px; font-weight:600; }
       .auth-form input { width:100%; box-sizing:border-box; height:48px; border:1px solid #dfe3eb; border-radius:11px; padding:0 14px; outline:none; font-size:14px; transition:.2s; }
       .auth-form input:focus { border-color:#2d68cf; box-shadow:0 0 0 4px rgba(45,104,207,.08); }
+      .auth-form .auth-remember { display:flex; align-items:flex-start; gap:10px; cursor:pointer; }
+      .auth-form .auth-remember input { width:17px; height:17px; margin:2px 0 0; padding:0; flex:0 0 auto; accent-color:#245ec2; box-shadow:none; }
+      .auth-remember span,.auth-remember strong,.auth-remember small { display:block; }
+      .auth-remember strong { color:#3f4858; font-size:13px; }
+      .auth-remember small { margin-top:3px; color:#8a93a2; font-size:11px; font-weight:400; line-height:1.4; }
 
       .auth-submit,.auth-google { width:100%; height:50px; border-radius:11px; cursor:pointer; font-size:14px; font-weight:700; }
       .auth-submit { border:0; background:#245ec2; color:#fff; margin-top:4px; }
