@@ -348,6 +348,25 @@ export default function Tracker({
       setSubmitting(false);
     }
   };
+  const handleGoogleSignIn = async () => {
+  setAuthError("");
+  setAuthMessage("");
+  setSubmitting(true);
+
+  try {
+    const error = await signInWithGoogle();
+
+    if (error) {
+      setAuthError(error);
+      setSubmitting(false);
+    }
+  } catch {
+    setAuthError(
+      "Unable to continue with Google. Please try again."
+    );
+    setSubmitting(false);
+  }
+};
 
   /* =======================================================
      LOGOUT
