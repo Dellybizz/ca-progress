@@ -273,6 +273,7 @@ export default function Tracker({
     configured,
     signIn,
     signUp,
+    signInWithGoogle,
     signOut,
     continueAsGuest,
     requireAuth,
