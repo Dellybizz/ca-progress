@@ -42,6 +42,8 @@ import {
 import CommunityChat from "@/components/CommunityChat";
 
 import {
+  CourseLevel,
+  courseSyllabi,
   syllabus,
   SubjectName,
 } from "@/lib/syllabus";
@@ -233,6 +235,30 @@ const subjectMeta: Record<
     short: string;
   }
 > = {
+  Accounting: {
+    code: "AC",
+    color: "#4263c7",
+    short: "Accounting",
+  },
+
+  "Business Laws": {
+    code: "BL",
+    color: "#c94f7c",
+    short: "Business Laws",
+  },
+
+  "Quantitative Aptitude": {
+    code: "QA",
+    color: "#6b5dcc",
+    short: "Quantitative Aptitude",
+  },
+
+  "Business Economics": {
+    code: "BE",
+    color: "#3d9a82",
+    short: "Business Economics",
+  },
+
   "Advanced Accounting": {
     code: "AA",
     color: "#5b6fd6",
@@ -267,6 +293,42 @@ const subjectMeta: Record<
     code: "FM",
     color: "#2f78bd",
     short: "Financial Management",
+  },
+
+  "Financial Reporting": {
+    code: "FR",
+    color: "#5368d4",
+    short: "Financial Reporting",
+  },
+
+  "Advanced Financial Management": {
+    code: "AF",
+    color: "#327fbc",
+    short: "Advanced Financial Management",
+  },
+
+  "Advanced Auditing, Assurance and Professional Ethics": {
+    code: "AU",
+    color: "#3d9b8c",
+    short: "Advanced Audit & Ethics",
+  },
+
+  "Direct Tax Laws & International Taxation": {
+    code: "DT",
+    color: "#e08a35",
+    short: "Direct Tax & International Tax",
+  },
+
+  "Indirect Tax Laws": {
+    code: "IT",
+    color: "#d55b78",
+    short: "Indirect Tax Laws",
+  },
+
+  "Integrated Business Solutions": {
+    code: "IB",
+    color: "#7659c6",
+    short: "Integrated Business Solutions",
   },
 };
 
@@ -546,7 +608,7 @@ export default function Tracker({
 
             <div className="auth-hero">
               <div className="auth-badge">
-                CA INTERMEDIATE
+                ALL CA LEVELS
               </div>
 
               <h1>
@@ -961,10 +1023,31 @@ function TrackerDashboard({
       saveStoredProgress,
   } = useProgress();
 
-  const subjects =
-    Object.keys(
-      syllabus
-    ) as SubjectName[];
+  const [
+    courseLevel,
+    setCourseLevel,
+  ] = useState<CourseLevel>(() => {
+    if (typeof window === "undefined") {
+      return "Intermediate";
+    }
+
+    const saved = window.localStorage.getItem(
+      "ca-progress-course-level"
+    ) as CourseLevel | null;
+
+    return saved &&
+      ["Foundation", "Intermediate", "Final"].includes(saved)
+      ? saved
+      : "Intermediate";
+  });
+
+  const subjects = useMemo(
+    () =>
+      Object.keys(
+        courseSyllabi[courseLevel]
+      ) as SubjectName[],
+    [courseLevel]
+  );
 
   const allRows = useMemo(
     () =>
@@ -1091,6 +1174,28 @@ function TrackerDashboard({
     search,
     setSearch,
   ] = useState("");
+
+  const changeCourseLevel = (
+    nextLevel: CourseLevel
+  ) => {
+    const nextSubjects = Object.keys(
+      courseSyllabi[nextLevel]
+    ) as SubjectName[];
+
+    setCourseLevel(nextLevel);
+    setActiveSubject(nextSubjects[0]);
+    setSearch("");
+
+    window.localStorage.setItem(
+      "ca-progress-course-level",
+      nextLevel
+    );
+
+    window.localStorage.setItem(
+      "ca-progress-subject",
+      nextSubjects[0]
+    );
+  };
 
   const [
     sidebarOpen,
@@ -1356,6 +1461,23 @@ function TrackerDashboard({
           </small>
         </div>
 
+        <label className="course-switcher">
+          <span>Course level</span>
+
+          <select
+            value={courseLevel}
+            onChange={(event) =>
+              changeCourseLevel(
+                event.target.value as CourseLevel
+              )
+            }
+          >
+            <option value="Foundation">CA Foundation</option>
+            <option value="Intermediate">CA Intermediate</option>
+            <option value="Final">CA Final</option>
+          </select>
+        </label>
+
         <nav>
           {menu.map(
             (item) => {
@@ -1406,7 +1528,7 @@ function TrackerDashboard({
             </b>
 
             <small>
-              CA Intermediate
+              CA {courseLevel}
             </small>
           </span>
 
@@ -1463,7 +1585,7 @@ function TrackerDashboard({
                 ? "Discipline today, success tomorrow."
                 : view === "Community"
                   ? "Connect, discuss and study together with fellow CA students."
-                  : "Track every step of your CA Intermediate preparation."}
+                  : `Track every step of your CA ${courseLevel} preparation.`}
             </p>
           </div>
 
@@ -1529,6 +1651,7 @@ function TrackerDashboard({
         {view ===
           "Dashboard" && (
           <Dashboard
+            courseLevel={courseLevel}
             subjects={
               subjects
             }
@@ -1774,6 +1897,7 @@ function TrackerDashboard({
 ========================================================= */
 
 function Dashboard({
+  courseLevel,
   subjects,
   overall,
   counts,
@@ -1801,7 +1925,7 @@ function Dashboard({
 
           <div>
             <small>
-              CA INTERMEDIATE EXAM
+              CA {String(courseLevel).toUpperCase()} EXAM
             </small>
 
             <div className="countdown">
