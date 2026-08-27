@@ -4409,6 +4409,16 @@ function SettingsView({
           </div>
         </section>
 
+        <section className="panel settings-section settings-membership">
+          <div className="settings-section-head">
+            <span className="settings-section-icon"><Crown size={18} /></span>
+            <div><h3>Membership and plans</h3><p>Compare available subscriptions and unlock eligible premium features.</p></div>
+          </div>
+          <button type="button" onClick={() => { window.location.href = "/pricing"; }}>
+            View subscription plans
+          </button>
+        </section>
+
         <section className="panel settings-section settings-data">
           <div className="settings-section-head">
             <span className="settings-section-icon">
