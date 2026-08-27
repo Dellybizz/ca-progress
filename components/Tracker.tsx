@@ -582,6 +582,18 @@ export default function Tracker({
                     ? "Sign in"
                     : "Create account"}
                 </button>
+                <button
+  type="button"
+  className="auth-google"
+  onClick={handleGoogleSignIn}
+  disabled={submitting}
+>
+  Continue with Google
+</button>
+
+<div className="auth-divider">
+  <span>or continue with email</span>
+</div>
               </form>
 
               <div className="auth-switch">
