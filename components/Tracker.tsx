@@ -112,6 +112,19 @@ const stages: {
   },
 ];
 
+const stagePrerequisites: Record<Stage, Stage | null> = {
+  done: null,
+  revision1: "done",
+  revision2: "revision1",
+  testDone: "done",
+  test2Done: "testDone",
+};
+
+const stageDependsOn = (stage: Stage, earlierStage: Stage): boolean => {
+  const prerequisite = stagePrerequisites[stage];
+  return prerequisite === earlierStage || Boolean(prerequisite && stageDependsOn(prerequisite, earlierStage));
+};
+
 const menu: {
   label: View;
   icon: typeof Home;
@@ -928,8 +941,7 @@ function TrackerDashboard({
         ]
       );
 
-    const stageIndex = stages.findIndex((item) => item.key === stage);
-    const previousStage = stageIndex > 0 ? stages[stageIndex - 1].key : null;
+    const previousStage = stagePrerequisites[stage];
 
     if (!wasOn && previousStage && !progress[key]?.[previousStage]) {
       return;
@@ -939,8 +951,8 @@ function TrackerDashboard({
       (current) => {
         const nextStages = { ...current[key], [stage]: !wasOn };
         if (wasOn) {
-          stages.slice(stageIndex + 1).forEach((laterStage) => {
-            nextStages[laterStage.key] = false;
+          stages.forEach((laterStage) => {
+            if (stageDependsOn(laterStage.key, stage)) nextStages[laterStage.key] = false;
           });
         }
         return { ...current, [key]: nextStages };
@@ -1428,14 +1440,14 @@ function Dashboard({
             </small>
 
             <b>
-              12{" "}
+              0{" "}
               <span>
                 days
               </span>
             </b>
 
             <p>
-              Keep it up! 🔥
+              Complete a chapter to begin
             </p>
           </div>
         </div>
@@ -1987,15 +1999,15 @@ function ChaptersView({
                 </span>
 
                 {stages.map(
-                  (stage, stageIndex) => {
-                    const previousStage = stageIndex > 0 ? stages[stageIndex - 1].key : null;
+                  (stage) => {
+                    const previousStage = stagePrerequisites[stage.key];
                     const locked = Boolean(previousStage && !progress[key]?.[previousStage]);
                     return (
                     <button
                       key={
                         stage.key
                       }
-                      title={locked ? `Complete ${stages[stageIndex - 1].label} first` : stage.label}
+                      title={locked && previousStage ? `Complete ${stages.find((item) => item.key === previousStage)?.label} first` : stage.label}
                       disabled={locked}
                       className={`stage-dot ${
                         progress[
