@@ -240,9 +240,12 @@ const keyFor = (
 
 export default function Tracker({
   initialView = "Dashboard",
+  authPage,
 }: {
   initialView?: View;
+  authPage?: AuthMode;
 }) {
+  const router = useRouter();
   const {
     session,
     authLoading,
@@ -256,7 +259,7 @@ export default function Tracker({
   } = useProgress();
 
   const [authMode, setAuthMode] =
-    useState<AuthMode>("login");
+    useState<AuthMode>(authPage || "login");
 
   const [email, setEmail] =
     useState("");
@@ -272,6 +275,19 @@ export default function Tracker({
 
   const [submitting, setSubmitting] =
     useState(false);
+
+  useEffect(() => {
+    if (authPage) setAuthMode(authPage);
+  }, [authPage]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (session && authPage) {
+      router.replace("/dashboard");
+    } else if (!session && !guestMode && !authPage) {
+      router.replace("/login");
+    }
+  }, [authLoading, authPage, guestMode, router, session]);
 
   /* =======================================================
      LOGIN / SIGNUP
@@ -365,7 +381,16 @@ export default function Tracker({
      AUTH SCREEN
   ======================================================= */
 
-  if (!session && !guestMode) {
+  if (session && authPage) {
+    return (
+      <div className="auth-loading">
+        <div className="auth-spinner" />
+        <p>Opening your dashboard...</p>
+      </div>
+    );
+  }
+
+  if (!session && (!guestMode || Boolean(authPage))) {
     return (
       <>
         <div className="auth-page">
@@ -524,11 +549,9 @@ export default function Tracker({
                 <button
                   type="button"
                   onClick={() => {
-                    setAuthMode(
-                      authMode === "login"
-                        ? "signup"
-                        : "login"
-                    );
+                    const nextMode = authMode === "login" ? "signup" : "login";
+                    setAuthMode(nextMode);
+                    router.push(nextMode === "signup" ? "/signup" : "/login");
 
                     setAuthError("");
                     setAuthMessage("");
@@ -547,6 +570,7 @@ export default function Tracker({
                   setAuthError("");
                   setAuthMessage("");
                   continueAsGuest();
+                  router.push("/dashboard");
                 }}
               >
                 Continue without an account
@@ -597,6 +621,7 @@ export default function Tracker({
           "Sign in or create an account to track and save your progress."
         );
         requireAuth();
+        router.push("/login");
       }}
     />
   );
