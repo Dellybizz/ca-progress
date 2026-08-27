@@ -31,6 +31,7 @@ import {
   Menu,
   NotebookPen,
   Plus,
+  Save,
   Search,
   Settings,
   Target,
@@ -86,8 +87,8 @@ const stages: {
 }[] = [
   {
     key: "done",
-    label: "Chapter Done",
-    short: "Done",
+    label: "Completed",
+    short: "Completed",
   },
   {
     key: "revision1",
@@ -101,8 +102,13 @@ const stages: {
   },
   {
     key: "testDone",
-    label: "Test Done",
-    short: "Test",
+    label: "Test 1",
+    short: "Test 1",
+  },
+  {
+    key: "test2Done",
+    label: "Test 2",
+    short: "Test 2",
   },
 ];
 
@@ -221,10 +227,11 @@ const stageCopy: Record<
   Stage,
   string
 > = {
-  done: "Marked as Done",
+  done: "Marked as Completed",
   revision1: "1st Revision Completed",
   revision2: "2nd Revision Completed",
-  testDone: "Test Completed",
+  testDone: "Test 1 Completed",
+  test2Done: "Test 2 Completed",
 };
 
 const keyFor = (
@@ -921,17 +928,23 @@ function TrackerDashboard({
         ]
       );
 
+    const stageIndex = stages.findIndex((item) => item.key === stage);
+    const previousStage = stageIndex > 0 ? stages[stageIndex - 1].key : null;
+
+    if (!wasOn && previousStage && !progress[key]?.[previousStage]) {
+      return;
+    }
+
     setProgress(
-      (current) => ({
-        ...current,
-
-        [key]: {
-          ...current[key],
-
-          [stage]:
-            !wasOn,
-        },
-      })
+      (current) => {
+        const nextStages = { ...current[key], [stage]: !wasOn };
+        if (wasOn) {
+          stages.slice(stageIndex + 1).forEach((laterStage) => {
+            nextStages[laterStage.key] = false;
+          });
+        }
+        return { ...current, [key]: nextStages };
+      }
     );
 
     if (!wasOn) {
@@ -1460,7 +1473,7 @@ function Dashboard({
                     size={16}
                   />
                 }
-                label="Chapters Done"
+                label="Completed"
                 value={
                   counts.done
                 }
@@ -1496,10 +1509,16 @@ function Dashboard({
                     size={16}
                   />
                 }
-                label="Tests Done"
+                label="Test 1"
                 value={
                   counts.testDone
                 }
+              />
+
+              <Metric
+                icon={<ClipboardCheck size={16} />}
+                label="Test 2"
+                value={counts.test2Done}
               />
             </div>
           </div>
@@ -1875,26 +1894,13 @@ function ChaptersView({
       </div>
 
       <div className="chapter-toolbar">
-        <div className="table-label">
-          {rows.length} Chapters
+        <div className="chapter-toolbar-copy">
+          <strong>{rows.length} Chapters</strong>
+          <span>Complete each stage in order, then save your changes.</span>
         </div>
 
-        <div
-          className="chapter-toolbar-actions"
-          style={{
-            display: "flex",
-            flexDirection: "row",
-            alignItems: "center",
-            gap: "10px",
-            flexWrap: "nowrap",
-          }}
-        >
-          <label
-            style={{
-              margin: 0,
-              minWidth: "272px",
-            }}
-          >
+        <div className="chapter-toolbar-actions">
+          <label>
             <Search
               size={16}
             />
@@ -1921,6 +1927,7 @@ function ChaptersView({
             onClick={onSaveProgress}
             disabled={saveStatus === "saving"}
           >
+            <Save size={15} />
             {saveStatus === "saving"
               ? "Saving..."
               : saveStatus === "saved"
@@ -1980,14 +1987,16 @@ function ChaptersView({
                 </span>
 
                 {stages.map(
-                  (stage) => (
+                  (stage, stageIndex) => {
+                    const previousStage = stageIndex > 0 ? stages[stageIndex - 1].key : null;
+                    const locked = Boolean(previousStage && !progress[key]?.[previousStage]);
+                    return (
                     <button
                       key={
                         stage.key
                       }
-                      title={
-                        stage.label
-                      }
+                      title={locked ? `Complete ${stages[stageIndex - 1].label} first` : stage.label}
+                      disabled={locked}
                       className={`stage-dot ${
                         progress[
                           key
@@ -1996,7 +2005,7 @@ function ChaptersView({
                         ]
                           ? `on ${stage.key}`
                           : ""
-                      }`}
+                      } ${locked ? "locked" : ""}`}
                       onClick={() =>
                         toggle(
                           activeSubject,
@@ -2017,7 +2026,8 @@ function ChaptersView({
                         />
                       )}
                     </button>
-                  )
+                    );
+                  }
                 )}
               </div>
             );
@@ -3098,83 +3108,6 @@ function AuthStyles() {
         margin-top: 20px;
         background: #fff8e8;
         color: #8a6316;
-      }
-
-      .chapter-toolbar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-      }
-
-      .chapter-toolbar {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        gap: 12px !important;
-        flex-wrap: nowrap !important;
-      }
-
-      .chapter-toolbar-actions {
-        display: flex !important;
-        flex-direction: row !important;
-        align-items: center !important;
-        gap: 10px !important;
-        width: 100%;
-        min-width: 0;
-      }
-      .chapter-toolbar-actions label {
-        display: flex !important;
-        align-items: center !important;
-        flex: 1 1 auto;
-        min-width: 0 !important;
-        margin: 0 !important;
-      }
-      .chapter-toolbar-actions input {
-        min-width: 0 !important;
-        width: 100%;
-      }
-      button.chapter-save-button {
-        appearance: none !important;
-        -webkit-appearance: none !important;
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        flex: 0 0 auto !important;
-        min-width: 132px !important;
-        height: 40px !important;
-        padding: 0 18px !important;
-        border: none !important;
-        border-radius: 9px !important;
-        background: #3568b8 !important;
-        color: #fff !important;
-        font-size: 13px !important;
-        font-weight: 700 !important;
-        white-space: nowrap !important;
-        cursor: pointer;
-      }
-      button.chapter-save-button.saved { background: #2f8a63 !important; }
-      button.chapter-save-button.error { background: #c2413b !important; }
-      button.chapter-save-button:disabled { opacity: .75; cursor: wait; }
-
-      @media (max-width: 720px) {
-        .chapter-toolbar-actions {
-          display: flex !important;
-          flex-direction: row !important;
-          align-items: center !important;
-          gap: 8px !important;
-          width: 100% !important;
-        }
-        .chapter-toolbar-actions label {
-          flex: 1 1 auto !important;
-          min-width: 0 !important;
-        }
-        button.chapter-save-button {
-          flex: 0 0 auto !important;
-          min-width: 126px !important;
-          height: 40px !important;
-          padding: 0 14px !important;
-        }
       }
 
       .logout-button {
