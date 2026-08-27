@@ -2,6 +2,7 @@
 
 import {
   FormEvent,
+  CSSProperties,
   Dispatch,
   ReactNode,
   SetStateAction,
@@ -21,6 +22,7 @@ import {
   ChevronRight,
   ClipboardCheck,
   Clock3,
+  Crown,
   FileText,
   Flame,
   Goal,
@@ -28,6 +30,7 @@ import {
   LineChart,
   LogIn,
   LogOut,
+  Lock,
   Menu,
   MessageCircle,
   NotebookPen,
@@ -35,6 +38,7 @@ import {
   Save,
   Search,
   Settings,
+  Shield,
   Target,
   Trophy,
 } from "lucide-react";
@@ -227,6 +231,21 @@ const viewRoutes: Record<
   Activity: "/activity",
   Notes: "/notes",
   Settings: "/settings",
+};
+
+const viewSectionKeys: Record<View, string> = {
+  Dashboard: "dashboard",
+  Community: "community",
+  Subjects: "subjects",
+  Chapters: "chapters",
+  Analytics: "analytics",
+  "Study Sessions": "study-sessions",
+  Goals: "goals",
+  "Test Series": "test-series",
+  Calendar: "calendar",
+  Activity: "activity",
+  Notes: "notes",
+  Settings: "settings",
 };
 
 const subjectMeta: Record<
@@ -1023,6 +1042,10 @@ function TrackerDashboard({
     notes,
     setNotes,
     saveStatus,
+    planRank,
+    planSlug,
+    isAdmin,
+    sectionRules,
     saveProgress:
       saveStoredProgress,
   } = useProgress();
@@ -1261,6 +1284,49 @@ function TrackerDashboard({
     setToast,
   ] = useState("");
 
+  const [upgradeFeature, setUpgradeFeature] = useState("");
+
+  const ruleFor = (label: View) =>
+    sectionRules.find(
+      (rule) => rule.section_key === viewSectionKeys[label]
+    );
+
+  const ruleIsVisible = (label: View) => {
+    const rule = ruleFor(label);
+    if (!rule || isAdmin) return true;
+    const now = Date.now();
+    if (!rule.enabled) return false;
+    if (rule.starts_at && new Date(rule.starts_at).getTime() > now) return false;
+    if (rule.ends_at && new Date(rule.ends_at).getTime() < now) return false;
+    if (rule.audience === "guest" && userId) return false;
+    if (rule.audience === "member" && !userId) return false;
+    return true;
+  };
+
+  const visibleMenu = menu
+    .filter((item) => ruleIsVisible(item.label))
+    .sort((a, b) =>
+      (ruleFor(a.label)?.sort_order ?? 999) -
+      (ruleFor(b.label)?.sort_order ?? 999)
+    );
+
+  useEffect(() => {
+    if (!sectionRules.length) return;
+    const rule = ruleFor(view);
+    const planLocked = Boolean(
+      userId &&
+      !isAdmin &&
+      rule &&
+      planRank < rule.minimum_plan_rank
+    );
+
+    if (!ruleIsVisible(view) || planLocked) {
+      if (planLocked) setUpgradeFeature(rule?.label || view);
+      setView("Dashboard");
+      router.replace(viewRoutes.Dashboard);
+    }
+  }, [isAdmin, planRank, router, sectionRules, userId, view]);
+
   const firstName =
     email
       ? email
@@ -1482,6 +1548,20 @@ function TrackerDashboard({
   const nav = (
     label: View
   ) => {
+    const rule = ruleFor(label);
+    if (!ruleIsVisible(label)) return;
+
+    if (
+      userId &&
+      !isAdmin &&
+      rule &&
+      planRank < rule.minimum_plan_rank
+    ) {
+      setUpgradeFeature(rule.label || label);
+      setSidebarOpen(false);
+      return;
+    }
+
     if (!userId && !publicViews.includes(label)) {
       onRequireAuth();
       setSidebarOpen(false);
@@ -1497,7 +1577,16 @@ function TrackerDashboard({
   };
 
   return (
-    <main className="app-shell">
+    <main
+      className={`app-shell layout-${String(
+        ruleFor(view)?.appearance?.layout || "standard"
+      )}`}
+      style={{
+        "--blue": String(
+          ruleFor(view)?.appearance?.accentColor || "#2d68cf"
+        ),
+      } as CSSProperties}
+    >
       {showCourseOnboarding && (
         <div className="course-modal-backdrop">
           <section
@@ -1594,7 +1683,7 @@ function TrackerDashboard({
         </div>
 
         <nav>
-          {menu.map(
+          {visibleMenu.map(
             (item) => {
               const Icon =
                 item.icon;
@@ -1621,8 +1710,14 @@ function TrackerDashboard({
                   />
 
                   <span>
-                    {item.label}
+                    {ruleFor(item.label)?.label || item.label}
                   </span>
+
+                  {userId &&
+                    !isAdmin &&
+                    planRank < (ruleFor(item.label)?.minimum_plan_rank || 0) && (
+                      <Lock size={12} className="nav-lock" />
+                    )}
                 </button>
               );
             }
@@ -1666,6 +1761,18 @@ function TrackerDashboard({
           }
           aria-label="Close menu"
         />
+      )}
+
+      {upgradeFeature && (
+        <div className="login-prompt-backdrop">
+          <section className="login-prompt">
+            <button className="login-prompt-close" onClick={() => setUpgradeFeature("")}>×</button>
+            <div className="login-prompt-icon"><Crown size={23} /></div>
+            <h2>Upgrade required</h2>
+            <p>{upgradeFeature} is not included in your current {planSlug} plan. Contact the administrator or choose an eligible subscription.</p>
+            <button className="login-prompt-primary" onClick={() => setUpgradeFeature("")}>Okay</button>
+          </section>
+        </div>
       )}
 
       <section
@@ -2020,6 +2127,7 @@ function TrackerDashboard({
               email
             }
             signedIn={Boolean(userId)}
+            isAdmin={isAdmin}
             courseLevel={courseLevel}
             courseGroup={courseGroup}
             onCourseChange={applyCourseSelection}
@@ -4123,6 +4231,7 @@ function WorkspaceRow({
 function SettingsView({
   email,
   signedIn,
+  isAdmin,
   courseLevel,
   courseGroup,
   onCourseChange,
@@ -4131,6 +4240,7 @@ function SettingsView({
 }: {
   email: string;
   signedIn: boolean;
+  isAdmin: boolean;
   courseLevel: CourseLevel;
   courseGroup: CourseGroup;
   onCourseChange: (
@@ -4179,6 +4289,15 @@ function SettingsView({
       </div>
 
       <div className="settings-layout">
+        {isAdmin && (
+          <section className="panel settings-section settings-admin-link">
+            <div className="settings-section-head">
+              <span className="settings-section-icon"><Shield size={18} /></span>
+              <div><h3>Administration</h3><p>Manage sections, plans, members, administrators and community messages.</p></div>
+            </div>
+            <button type="button" onClick={() => { window.location.href = "/admin"; }}>Open admin panel</button>
+          </section>
+        )}
         <section className="panel settings-section course-settings">
           <div className="settings-section-head">
             <span className="settings-section-icon">
