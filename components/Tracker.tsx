@@ -55,6 +55,7 @@ import {
 
 import {
   ActivityItem,
+  AppPageElement,
   CalendarItem,
   GoalItem,
   NoteItem,
@@ -1050,6 +1051,7 @@ function TrackerDashboard({
     planSlug,
     isAdmin,
     sectionRules,
+    pageElements,
     saveProgress:
       saveStoredProgress,
   } = useProgress();
@@ -1928,6 +1930,10 @@ function TrackerDashboard({
             onViewAll={() =>
               nav("Activity")
             }
+            pageElements={pageElements}
+            signedIn={Boolean(userId)}
+            planRank={planRank}
+            isAdmin={isAdmin}
           />
         )}
 
@@ -2166,14 +2172,25 @@ function Dashboard({
   onQuickGoal,
   onQuickCalendar,
   onViewAll,
+  pageElements,
+  signedIn,
+  planRank,
+  isAdmin,
 }: any) {
   const recent =
     activities.slice(0, 4);
+  const configured=Boolean((pageElements as AppPageElement[]|undefined)?.some(item=>item.page_key==="dashboard"));
+  const element=(key:string)=>((pageElements||[]) as AppPageElement[]).find(item=>item.page_key==="dashboard"&&item.element_key===key);
+  const visible=(key:string)=>{const item=element(key);if(!configured||!item)return true;if(isAdmin)return true;if(!item.enabled)return false;if(item.audience==="guest"&&signedIn)return false;if(item.audience==="member"&&!signedIn)return false;if(signedIn&&planRank<item.minimum_plan_rank)return false;return true};
+  const title=(key:string,fallback:string)=>element(key)?.label||fallback;
+  const elementStyle=(key:string):CSSProperties=>{const item=element(key);return {order:item?.sort_order,background:String(item?.appearance?.backgroundColor||"" )||undefined,color:String(item?.appearance?.textColor||"")||undefined,borderRadius:item?.appearance?.borderRadius?`${Number(item.appearance.borderRadius)}px`:undefined}};
+  const quickActions=((pageElements||[]) as AppPageElement[]).filter(item=>item.page_key==="dashboard"&&item.element_type==="quick_action"&&(!configured||visible(item.element_key))).sort((a,b)=>a.sort_order-b.sort_order);
+  const actionMap:Record<string,()=>void>={"quick-study":onQuickStudy,"quick-test":onQuickTest,"quick-goal":onQuickGoal,"quick-calendar":onQuickCalendar};
 
   return (
     <>
       <div className="dashboard-head">
-        <div className="exam-card">
+        {visible("exam-countdown")&&<div className="exam-card" style={elementStyle("exam-countdown")}>
           <CalendarDays
             size={28}
           />
@@ -2216,9 +2233,9 @@ function Dashboard({
               </b>
             </div>
           </div>
-        </div>
+        </div>}
 
-        <div className="streak-card">
+        {visible("daily-streak")&&<div className="streak-card" style={elementStyle("daily-streak")}>
           <div className="flame">
             <Flame
               size={31}
@@ -2227,7 +2244,7 @@ function Dashboard({
 
           <div>
             <small>
-              Daily Streak
+              {title("daily-streak","Daily Streak")}
             </small>
 
             <b>
@@ -2241,13 +2258,13 @@ function Dashboard({
               Complete a chapter to begin
             </p>
           </div>
-        </div>
+        </div>}
       </div>
 
       <div className="dashboard-grid top-grid">
-        <section className="panel overall-card">
+        {visible("overall-progress")&&<section className="panel overall-card" style={elementStyle("overall-progress")}>
           <h3>
-            Overall Progress
+            {title("overall-progress","Overall Progress")}
           </h3>
 
           <div className="overall-body">
@@ -2331,11 +2348,11 @@ function Dashboard({
               />
             </div>
           </div>
-        </section>
+        </section>}
 
-        <section className="panel activity-progress">
+        {visible("activity-progress")&&<section className="panel activity-progress" style={elementStyle("activity-progress")}>
           <h3>
-            Progress by Activity
+            {title("activity-progress","Progress by Activity")}
           </h3>
 
           {stages.map(
@@ -2363,11 +2380,11 @@ function Dashboard({
               />
             )
           )}
-        </section>
+        </section>}
 
-        <section className="panel study-card">
+        {visible("study-week")&&<section className="panel study-card" style={elementStyle("study-week")}>
           <h3>
-            Study This Week
+            {title("study-week","Study This Week")}
           </h3>
 
           <div className="study-total">
@@ -2393,14 +2410,14 @@ function Dashboard({
               studyHours
             }
           />
-        </section>
+        </section>}
       </div>
 
       <div className="dashboard-grid lower-grid">
-        <section className="panel subject-panel">
+        {visible("subject-progress")&&<section className="panel subject-panel" style={elementStyle("subject-progress")}>
           <div className="panel-heading">
             <h3>
-              Subject Progress
+              {title("subject-progress","Subject Progress")}
             </h3>
 
             <button
@@ -2434,12 +2451,12 @@ function Dashboard({
               />
             )
           )}
-        </section>
+        </section>}
 
-        <section className="panel recent-panel">
+        {visible("recent-activity")&&<section className="panel recent-panel" style={elementStyle("recent-activity")}>
           <div className="panel-heading">
             <h3>
-              Recent Activity
+              {title("recent-activity","Recent Activity")}
             </h3>
 
             <button
@@ -2471,63 +2488,15 @@ function Dashboard({
                 No saved activity yet.
               </div>
             )}
-        </section>
+        </section>}
 
-        <section className="panel quick-panel">
+        {visible("quick-actions")&&<section className="panel quick-panel" style={elementStyle("quick-actions")}>
           <h3>
-            Quick Actions
+            {title("quick-actions","Quick Actions")}
           </h3>
 
-          <div className="quick-grid">
-            <button
-              onClick={
-                onQuickStudy
-              }
-            >
-              <Clock3 />
-
-              <span>
-                Start Study Session
-              </span>
-            </button>
-
-            <button
-              onClick={
-                onQuickTest
-              }
-            >
-              <ClipboardCheck />
-
-              <span>
-                Take a Test
-              </span>
-            </button>
-
-            <button
-              onClick={
-                onQuickGoal
-              }
-            >
-              <Goal />
-
-              <span>
-                Add Goal
-              </span>
-            </button>
-
-            <button
-              onClick={
-                onQuickCalendar
-              }
-            >
-              <CalendarDays />
-
-              <span>
-                View Calendar
-              </span>
-            </button>
-          </div>
-        </section>
+          <div className="quick-grid">{(configured?quickActions:[{element_key:"quick-study",label:"Start Study Session",config:{}},{element_key:"quick-test",label:"Take a Test",config:{}},{element_key:"quick-goal",label:"Add Goal",config:{}},{element_key:"quick-calendar",label:"View Calendar",config:{}}] as AppPageElement[]).map(action=><button key={action.element_key} onClick={actionMap[action.element_key]||(()=>{const route=String(action.config?.route||"");if(route)window.location.href=route})}><Goal/><span>{action.label}</span></button>)}</div>
+        </section>}
       </div>
     </>
   );
