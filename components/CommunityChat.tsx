@@ -1,13 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import {
-  Hash,
-  MessageCircle,
-  Send,
-  Users,
-} from "lucide-react";
+import { Hash, MessageCircle, Send } from "lucide-react";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -27,71 +22,51 @@ type CommunityMessage = {
 
 type Channel = {
   id: string;
-  label: string;
+  name: string;
   description: string;
 };
 
 const channels: Channel[] = [
   {
     id: "general",
-    label: "General",
-    description: "Talk about anything related to CA preparation.",
+    name: "General",
+    description: "Discuss anything related to CA preparation.",
   },
   {
     id: "foundation",
-    label: "CA Foundation",
-    description: "Discussion for CA Foundation students.",
+    name: "CA Foundation",
+    description: "Connect with CA Foundation students.",
   },
   {
     id: "intermediate",
-    label: "CA Intermediate",
+    name: "CA Intermediate",
     description: "Discuss CA Intermediate preparation.",
   },
   {
     id: "final",
-    label: "CA Final",
-    description: "Discussion for CA Final students.",
+    name: "CA Final",
+    description: "Connect with CA Final students.",
   },
   {
     id: "doubts",
-    label: "Doubts & Discussion",
+    name: "Doubts",
     description: "Ask questions and help other students.",
   },
   {
     id: "motivation",
-    label: "Study Motivation",
-    description: "Stay consistent and motivate each other.",
+    name: "Motivation",
+    description: "Stay motivated and consistent together.",
   },
 ];
 
-function getDisplayName(email: string) {
-  if (!email) return "Student";
+function formatTime(dateString: string) {
+  const date = new Date(dateString);
 
-  return email
-    .split("@")[0]
-    .replace(/[._-]/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function formatTime(value: string) {
-  const date = new Date(value);
-  const now = new Date();
-
-  const sameDay =
-    date.getDate() === now.getDate() &&
-    date.getMonth() === now.getMonth() &&
-    date.getFullYear() === now.getFullYear();
-
-  if (sameDay) {
-    return date.toLocaleTimeString([], {
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  }
-
-  return date.toLocaleDateString([], {
+  return date.toLocaleString([], {
     day: "numeric",
     month: "short",
+    hour: "numeric",
+    minute: "2-digit",
   });
 }
 
@@ -100,7 +75,7 @@ export default function CommunityChat({
   email,
 }: {
   userId: string;
-  email: string;
+  email?: string | null;
 }) {
   const [activeChannel, setActiveChannel] =
     useState("general");
@@ -108,7 +83,7 @@ export default function CommunityChat({
   const [messages, setMessages] =
     useState<CommunityMessage[]>([]);
 
-  const [draft, setDraft] =
+  const [message, setMessage] =
     useState("");
 
   const [loading, setLoading] =
@@ -120,24 +95,19 @@ export default function CommunityChat({
   const [error, setError] =
     useState("");
 
-  const messagesEndRef =
+  const bottomRef =
     useRef<HTMLDivElement | null>(null);
 
-  const activeChannelData = useMemo(
-    () =>
-      channels.find(
-        (channel) =>
-          channel.id === activeChannel
-      ) || channels[0],
-    [activeChannel]
-  );
+  const currentChannel =
+    channels.find(
+      (channel) =>
+        channel.id === activeChannel
+    ) || channels[0];
 
   const displayName =
-    getDisplayName(email);
-
-  const initial =
-    displayName.charAt(0).toUpperCase() ||
-    "S";
+    email
+      ? email.split("@")[0]
+      : "Student";
 
   useEffect(() => {
     if (!supabase) {
@@ -157,9 +127,7 @@ export default function CommunityChat({
       const { data, error } =
         await supabase
           .from("community_messages")
-          .select(
-            "id, user_id, channel, message, created_at"
-          )
+          .select("*")
           .eq(
             "channel",
             activeChannel
@@ -167,7 +135,7 @@ export default function CommunityChat({
           .order(
             "created_at",
             {
-              ascending: false,
+              ascending: true,
             }
           )
           .limit(100);
@@ -175,18 +143,12 @@ export default function CommunityChat({
       if (!mounted) return;
 
       if (error) {
-        console.error(
-          "Unable to load community messages:",
-          error.message
-        );
-
+        console.error(error);
         setError(
-          "Unable to load messages. Please try again."
+          "Unable to load messages."
         );
       } else {
-        setMessages(
-          (data || []).reverse()
-        );
+        setMessages(data || []);
       }
 
       setLoading(false);
@@ -194,51 +156,56 @@ export default function CommunityChat({
 
     loadMessages();
 
-    const channel = supabase
-      .channel(
-        `community-${activeChannel}`
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "community_messages",
-          filter: `channel=eq.${activeChannel}`,
-        },
-        (payload) => {
-          const message =
-            payload.new as CommunityMessage;
+    const realtimeChannel =
+      supabase
+        .channel(
+          `community-${activeChannel}`
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "community_messages",
+            filter: `channel=eq.${activeChannel}`,
+          },
+          (payload) => {
+            const newMessage =
+              payload.new as CommunityMessage;
 
-          setMessages(
-            (current) => {
-              if (
-                current.some(
-                  (item) =>
-                    item.id === message.id
-                )
-              ) {
-                return current;
+            setMessages(
+              (current) => {
+                if (
+                  current.some(
+                    (item) =>
+                      item.id ===
+                      newMessage.id
+                  )
+                ) {
+                  return current;
+                }
+
+                return [
+                  ...current,
+                  newMessage,
+                ];
               }
-
-              return [
-                ...current,
-                message,
-              ];
-            }
-          );
-        }
-      )
-      .subscribe();
+            );
+          }
+        )
+        .subscribe();
 
     return () => {
       mounted = false;
-      supabase.removeChannel(channel);
+
+      supabase.removeChannel(
+        realtimeChannel
+      );
     };
   }, [activeChannel]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({
+    bottomRef.current?.scrollIntoView({
       behavior: "smooth",
     });
   }, [messages]);
@@ -248,12 +215,13 @@ export default function CommunityChat({
   ) => {
     event.preventDefault();
 
-    const text = draft.trim();
+    const trimmed =
+      message.trim();
 
     if (
-      !text ||
-      sending ||
-      !supabase
+      !trimmed ||
+      !supabase ||
+      sending
     ) {
       return;
     }
@@ -267,253 +235,216 @@ export default function CommunityChat({
         .insert({
           user_id: userId,
           channel: activeChannel,
-          message: text,
+          message: trimmed,
         });
 
     if (error) {
-      console.error(
-        "Unable to send community message:",
-        error.message
-      );
+      console.error(error);
 
       setError(
-        "Message could not be sent. Please try again."
+        "Unable to send message."
       );
     } else {
-      setDraft("");
+      setMessage("");
     }
 
     setSending(false);
   };
 
   return (
-    <section className="community-page">
-      <div className="community-layout">
-        <aside className="community-channels">
-          <div className="community-channels-head">
-            <div className="community-icon">
-              <MessageCircle size={19} />
-            </div>
+    <div className="community">
+      <aside className="community-sidebar">
+        <div className="community-sidebar-header">
+          <MessageCircle size={20} />
 
-            <div>
-              <h2>Community</h2>
-              <p>Study together</p>
-            </div>
+          <div>
+            <h2>Community</h2>
+            <p>Study together</p>
           </div>
+        </div>
 
-          <div className="community-channel-list">
-            {channels.map(
-              (channel) => (
-                <button
-                  key={channel.id}
-                  type="button"
-                  className={
-                    activeChannel ===
-                    channel.id
-                      ? "community-channel active"
-                      : "community-channel"
-                  }
-                  onClick={() =>
-                    setActiveChannel(
-                      channel.id
-                    )
-                  }
-                >
-                  <Hash size={16} />
-
-                  <span>
-                    {channel.label}
-                  </span>
-                </button>
-              )
-            )}
-          </div>
-
-          <div className="community-members">
-            <Users size={16} />
-
-            <span>
-              CA Progress Community
-            </span>
-          </div>
-        </aside>
-
-        <div className="community-chat">
-          <header className="community-chat-header">
-            <div>
-              <div className="community-title">
-                <Hash size={20} />
-
-                <h2>
-                  {
-                    activeChannelData.label
-                  }
-                </h2>
-              </div>
-
-              <p>
-                {
-                  activeChannelData.description
+        <div className="community-channels">
+          {channels.map(
+            (channel) => (
+              <button
+                key={channel.id}
+                type="button"
+                className={
+                  activeChannel ===
+                  channel.id
+                    ? "community-channel active"
+                    : "community-channel"
                 }
-              </p>
-            </div>
-          </header>
+                onClick={() =>
+                  setActiveChannel(
+                    channel.id
+                  )
+                }
+              >
+                <Hash size={16} />
 
-          <div className="community-messages">
-            {loading ? (
-              <div className="community-state">
-                Loading messages...
-              </div>
-            ) : error &&
-              messages.length === 0 ? (
-              <div className="community-state error">
+                {channel.name}
+              </button>
+            )
+          )}
+        </div>
+      </aside>
+
+      <main className="community-main">
+        <header className="community-header">
+          <div>
+            <div className="community-title">
+              <Hash size={20} />
+
+              <h1>
+                {currentChannel.name}
+              </h1>
+            </div>
+
+            <p>
+              {
+                currentChannel.description
+              }
+            </p>
+          </div>
+        </header>
+
+        <div className="community-messages">
+          {loading && (
+            <div className="community-status">
+              Loading messages...
+            </div>
+          )}
+
+          {!loading &&
+            error &&
+            messages.length === 0 && (
+              <div className="community-status">
                 {error}
               </div>
-            ) : messages.length === 0 ? (
+            )}
+
+          {!loading &&
+            !error &&
+            messages.length === 0 && (
               <div className="community-empty">
-                <div>
-                  <MessageCircle
-                    size={28}
-                  />
-                </div>
+                <MessageCircle size={34} />
 
                 <h3>
                   Start the conversation
                 </h3>
 
                 <p>
-                  Be the first to send a
-                  message in{" "}
-                  {
-                    activeChannelData.label
-                  }.
+                  Be the first person to
+                  send a message here.
                 </p>
               </div>
-            ) : (
-              messages.map(
-                (item) => {
-                  const mine =
-                    item.user_id ===
-                    userId;
-
-                  const messageInitial =
-                    mine
-                      ? initial
-                      : "S";
-
-                  return (
-                    <article
-                      className={
-                        mine
-                          ? "community-message mine"
-                          : "community-message"
-                      }
-                      key={item.id}
-                    >
-                      <div className="community-message-avatar">
-                        {
-                          messageInitial
-                        }
-                      </div>
-
-                      <div className="community-message-body">
-                        <div className="community-message-meta">
-                          <b>
-                            {mine
-                              ? "You"
-                              : "CA Student"}
-                          </b>
-
-                          <time>
-                            {formatTime(
-                              item.created_at
-                            )}
-                          </time>
-                        </div>
-
-                        <p>
-                          {item.message}
-                        </p>
-                      </div>
-                    </article>
-                  );
-                }
-              )
             )}
 
-            <div
-              ref={
-                messagesEndRef
-              }
-            />
-          </div>
+          {messages.map(
+            (item) => {
+              const isMine =
+                item.user_id === userId;
 
-          <form
-            className="community-input"
-            onSubmit={
-              sendMessage
+              return (
+                <div
+                  key={item.id}
+                  className={
+                    isMine
+                      ? "community-message mine"
+                      : "community-message"
+                  }
+                >
+                  <div className="message-avatar">
+                    {isMine
+                      ? displayName
+                          .charAt(0)
+                          .toUpperCase()
+                      : "S"}
+                  </div>
+
+                  <div className="message-content">
+                    <div className="message-meta">
+                      <strong>
+                        {isMine
+                          ? "You"
+                          : "CA Student"}
+                      </strong>
+
+                      <span>
+                        {formatTime(
+                          item.created_at
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="message-bubble">
+                      {item.message}
+                    </div>
+                  </div>
+                </div>
+              );
             }
-          >
-            <div>
-              <input
-                value={draft}
-                onChange={(event) =>
-                  setDraft(
-                    event.target.value
-                  )
-                }
-                placeholder={`Message #${activeChannelData.label}`}
-                maxLength={2000}
-                disabled={sending}
-              />
+          )}
 
-              <button
-                type="submit"
-                disabled={
-                  sending ||
-                  !draft.trim()
-                }
-                aria-label="Send message"
-              >
-                <Send size={18} />
-              </button>
-            </div>
-
-            {error && (
-              <span className="community-send-error">
-                {error}
-              </span>
-            )}
-          </form>
+          <div ref={bottomRef} />
         </div>
-      </div>
+
+        <form
+          className="community-input"
+          onSubmit={sendMessage}
+        >
+          <input
+            value={message}
+            onChange={(event) =>
+              setMessage(
+                event.target.value
+              )
+            }
+            placeholder={`Message #${currentChannel.name}`}
+            maxLength={2000}
+            disabled={sending}
+          />
+
+          <button
+            type="submit"
+            disabled={
+              sending ||
+              !message.trim()
+            }
+            aria-label="Send message"
+          >
+            <Send size={18} />
+          </button>
+        </form>
+
+        {error && messages.length > 0 && (
+          <div className="community-error">
+            {error}
+          </div>
+        )}
+      </main>
 
       <style>{`
-        .community-page {
+        .community {
           height: calc(100vh - 120px);
           min-height: 620px;
-          padding: 0 0 4px;
-        }
-
-        .community-layout {
-          height: 100%;
           display: grid;
-          grid-template-columns: 260px minmax(0, 1fr);
+          grid-template-columns: 240px minmax(0, 1fr);
           overflow: hidden;
-          background: #fff;
-          border: 1px solid #e7eaf0;
+          border: 1px solid #e6e9ee;
           border-radius: 18px;
+          background: #ffffff;
         }
 
-        .community-channels {
+        .community-sidebar {
           display: flex;
           flex-direction: column;
-          border-right: 1px solid #e9edf3;
-          background: #fbfcfe;
-          min-width: 0;
+          border-right: 1px solid #edf0f4;
+          background: #fafbfd;
         }
 
-        .community-channels-head {
+        .community-sidebar-header {
           display: flex;
           align-items: center;
           gap: 12px;
@@ -521,29 +452,19 @@ export default function CommunityChat({
           border-bottom: 1px solid #edf0f4;
         }
 
-        .community-icon {
-          width: 38px;
-          height: 38px;
-          display: grid;
-          place-items: center;
-          border-radius: 12px;
-          background: #eef3ff;
-          color: #2d68cf;
-        }
-
-        .community-channels h2 {
+        .community-sidebar-header h2 {
           margin: 0;
           font-size: 15px;
-          color: #1d2738;
+          color: #202938;
         }
 
-        .community-channels p {
+        .community-sidebar-header p {
           margin: 3px 0 0;
-          color: #9299a7;
           font-size: 11px;
+          color: #9299a5;
         }
 
-        .community-channel-list {
+        .community-channels {
           padding: 12px 10px;
           display: grid;
           gap: 3px;
@@ -553,48 +474,36 @@ export default function CommunityChat({
           width: 100%;
           display: flex;
           align-items: center;
-          gap: 9px;
-          padding: 10px 11px;
+          gap: 8px;
           border: 0;
           border-radius: 9px;
+          padding: 10px 11px;
           background: transparent;
-          color: #70798a;
+          color: #717a88;
           font-size: 13px;
           text-align: left;
           cursor: pointer;
         }
 
         .community-channel:hover {
-          background: #f1f4f8;
-          color: #344052;
+          background: #f0f3f7;
+          color: #303947;
         }
 
         .community-channel.active {
-          background: #eaf1ff;
-          color: #2862c3;
-          font-weight: 700;
+          background: #edf3ff;
+          color: #2c64c7;
+          font-weight: 600;
         }
 
-        .community-members {
-          margin-top: auto;
-          display: flex;
-          align-items: center;
-          gap: 9px;
-          padding: 16px 18px;
-          border-top: 1px solid #edf0f4;
-          color: #9098a6;
-          font-size: 11px;
-        }
-
-        .community-chat {
+        .community-main {
           min-width: 0;
           min-height: 0;
           display: grid;
           grid-template-rows: auto minmax(0, 1fr) auto;
-          background: #fff;
         }
 
-        .community-chat-header {
+        .community-header {
           padding: 20px 26px;
           border-bottom: 1px solid #edf0f4;
         }
@@ -603,114 +512,106 @@ export default function CommunityChat({
           display: flex;
           align-items: center;
           gap: 8px;
-          color: #202b3d;
+          color: #252f3d;
         }
 
-        .community-title h2 {
+        .community-title h1 {
           margin: 0;
           font-size: 17px;
         }
 
-        .community-chat-header p {
+        .community-header p {
           margin: 5px 0 0;
-          color: #8a93a1;
           font-size: 12px;
+          color: #8e96a3;
         }
 
         .community-messages {
           overflow-y: auto;
-          padding: 22px 26px;
+          padding: 24px 26px;
           display: flex;
           flex-direction: column;
-          gap: 20px;
-          scroll-behavior: smooth;
+          gap: 18px;
         }
 
         .community-message {
           display: flex;
-          gap: 11px;
-          max-width: 760px;
+          gap: 10px;
+          max-width: 720px;
         }
 
-        .community-message-avatar {
+        .message-avatar {
           flex: 0 0 36px;
           width: 36px;
           height: 36px;
           display: grid;
           place-items: center;
           border-radius: 50%;
-          background: #eef2f8;
-          color: #536073;
-          font-size: 12px;
-          font-weight: 800;
+          background: #eef1f5;
+          color: #697586;
+          font-size: 13px;
+          font-weight: 700;
         }
 
-        .community-message.mine .community-message-avatar {
-          background: #e8f0ff;
-          color: #2862c3;
+        .mine .message-avatar {
+          background: #eaf1ff;
+          color: #2d67ca;
         }
 
-        .community-message-body {
+        .message-content {
           min-width: 0;
         }
 
-        .community-message-meta {
+        .message-meta {
           display: flex;
           align-items: center;
           gap: 8px;
           margin-bottom: 5px;
         }
 
-        .community-message-meta b {
-          color: #30394a;
-          font-size: 13px;
+        .message-meta strong {
+          font-size: 12px;
+          color: #354050;
         }
 
-        .community-message-meta time {
-          color: #a0a7b2;
+        .message-meta span {
           font-size: 10px;
+          color: #a0a7b1;
         }
 
-        .community-message-body p {
-          margin: 0;
+        .message-bubble {
           padding: 10px 13px;
           border-radius: 4px 12px 12px 12px;
-          background: #f5f7fa;
-          color: #3e4858;
+          background: #f4f6f8;
+          color: #404957;
           font-size: 13px;
           line-height: 1.55;
           white-space: pre-wrap;
           word-break: break-word;
         }
 
-        .community-message.mine .community-message-body p {
+        .mine .message-bubble {
           background: #edf4ff;
-          color: #244c8e;
+          color: #284e8d;
         }
 
-        .community-empty,
-        .community-state {
+        .community-status,
+        .community-empty {
           margin: auto;
           text-align: center;
-          color: #8a93a1;
+          color: #8b94a1;
           font-size: 13px;
         }
 
-        .community-empty > div {
-          width: 58px;
-          height: 58px;
-          margin: 0 auto 15px;
-          display: grid;
-          place-items: center;
-          border-radius: 18px;
-          background: #f2f5f9;
-          color: #7d8795;
+        .community-empty svg {
+          margin-bottom: 12px;
+          color: #9da6b2;
         }
 
         .community-empty h3 {
           margin: 0;
-          color: #3a4351;
           font-size: 16px;
+          color: #404957;
         }
 
         .community-empty p {
@@ -718,56 +619,39 @@ export default function CommunityChat({
           font-size: 12px;
         }
 
-        .community-state.error {
-          color: #c34c4c;
-        }
-
         .community-input {
-          padding: 16px 22px 20px;
-          border-top: 1px solid #edf0f4;
-        }
-
-        .community-input > div {
           display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 6px 7px 6px 14px;
-          border: 1px solid #dfe4eb;
-          border-radius: 12px;
-          background: #fff;
-        }
-
-        .community-input > div:focus-within {
-          border-color: #9bb7e9;
-          box-shadow: 0 0 0 3px rgba(45, 104, 207, 0.07);
+          gap: 9px;
+          padding: 16px 20px;
+          border-top: 1px solid #edf0f4;
         }
 
         .community-input input {
           flex: 1;
           min-width: 0;
-          height: 38px;
-          border: 0;
-          outline: 0;
-          background: transparent;
-          color: #30394a;
+          height: 44px;
+          padding: 0 15px;
+          border: 1px solid #dfe4ea;
+          border-radius: 11px;
+          outline: none;
           font-size: 13px;
         }
 
+        .community-input input:focus {
+          border-color: #8eafe5;
+          box-shadow: 0 0 0 3px rgba(45, 103, 202, 0.08);
+        }
+
         .community-input button {
-          width: 40px;
-          height: 40px;
+          width: 44px;
+          height: 44px;
           display: grid;
           place-items: center;
           border: 0;
-          border-radius: 9px;
-          background: #2d68cf;
-          color: #fff;
+          border-radius: 11px;
+          background: #2d67ca;
+          color: #ffffff;
           cursor: pointer;
-          transition: 0.2s;
-        }
-
-        .community-input button:hover:not(:disabled) {
-          background: #225ab7;
         }
 
         .community-input button:disabled {
@@ -775,49 +659,41 @@ export default function CommunityChat({
           cursor: not-allowed;
         }
 
-        .community-send-error {
-          display: block;
-          margin-top: 7px;
-          color: #c34c4c;
+        .community-error {
+          padding: 0 20px 12px;
+          color: #c74646;
           font-size: 11px;
         }
 
         @media (max-width: 760px) {
-          .community-page {
+          .community {
             height: calc(100vh - 100px);
             min-height: 560px;
-          }
-
-          .community-layout {
             grid-template-columns: 1fr;
           }
 
-          .community-channels {
-            display: block;
+          .community-sidebar {
             border-right: 0;
-            border-bottom: 1px solid #e9edf3;
+            border-bottom: 1px solid #edf0f4;
           }
 
-          .community-channels-head,
-          .community-members {
+          .community-sidebar-header {
             display: none;
           }
 
-          .community-channel-list {
+          .community-channels {
             display: flex;
             overflow-x: auto;
-            padding: 9px;
-            gap: 5px;
+            padding: 8px;
           }
 
           .community-channel {
             width: auto;
             flex: 0 0 auto;
-            padding: 8px 10px;
             white-space: nowrap;
           }
 
-          .community-chat-header {
+          .community-header {
             padding: 16px 18px;
           }
 
@@ -826,10 +702,10 @@ export default function CommunityChat({
           }
 
           .community-input {
-            padding: 12px 14px 14px;
+            padding: 12px;
           }
         }
       `}</style>
-    </section>
+    </div>
   );
 }
