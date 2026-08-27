@@ -306,8 +306,8 @@ export default function Tracker({
     authLoading,
     guestMode,
     configured,
-    signIn,
-    signUp,
+    sendPhoneOtp,
+    verifyPhoneOtp,
     signInWithGoogle,
     signOut,
     continueAsGuest,
@@ -315,21 +315,19 @@ export default function Tracker({
   } = useProgress();
 
   const [
-    authMode,
-    setAuthMode,
-  ] = useState<AuthMode>(
-    authPage || "login"
-  );
-
-  const [
-    email,
-    setEmail,
+    phone,
+    setPhone,
   ] = useState("");
 
   const [
-    password,
-    setPassword,
+    phoneOtp,
+    setPhoneOtp,
   ] = useState("");
+
+  const [
+    phoneOtpSent,
+    setPhoneOtpSent,
+  ] = useState(false);
 
   const [
     authError,
@@ -357,12 +355,6 @@ export default function Tracker({
   ] = useState(false);
 
   useEffect(() => {
-    if (authPage) {
-      setAuthMode(authPage);
-    }
-  }, [authPage]);
-
-  useEffect(() => {
     if (authLoading) return;
 
     if (session && authPage) {
@@ -376,7 +368,7 @@ export default function Tracker({
   ]);
 
   /* =======================================================
-     LOGIN / SIGNUP
+     PHONE OTP LOGIN
   ======================================================= */
 
   const handleAuth = async (
@@ -389,35 +381,43 @@ export default function Tracker({
     setSubmitting(true);
 
     try {
-      if (authMode === "login") {
-        const error =
-          await signIn(
-            email,
-            password,
-            rememberOnDevice
-          );
+      const digits = phone.replace(/\D/g, "");
 
-        if (error) {
-          setAuthError(error);
+      if (digits.length < 10) {
+        setAuthError(
+          "Enter a valid mobile number with country code."
+        );
+        return;
+      }
+
+      const normalizedPhone =
+        digits.length === 10
+          ? `+91${digits}`
+          : phone.trim().startsWith("+")
+          ? `+${digits}`
+          : `+${digits}`;
+
+      if (!phoneOtpSent) {
+        const error = await sendPhoneOtp(
+          normalizedPhone,
+          rememberOnDevice
+        );
+
+        if (error) setAuthError(error);
+        else {
+          setPhoneOtpSent(true);
+          setAuthMessage(
+            `Verification code sent to ${normalizedPhone}.`
+          );
         }
       } else {
-        const result =
-          await signUp(
-            email,
-            password
-          );
+        const error = await verifyPhoneOtp(
+          normalizedPhone,
+          phoneOtp.trim(),
+          rememberOnDevice
+        );
 
-        if (result.error) {
-          setAuthError(
-            result.error
-          );
-        } else if (
-          result.needsConfirmation
-        ) {
-          setAuthMessage(
-            "Account created. Please check your email to confirm your account."
-          );
-        }
+        if (error) setAuthError(error);
       }
     } catch {
       setAuthError(
@@ -608,17 +608,29 @@ export default function Tracker({
           <div className="auth-right">
             <div className="auth-card">
               <div className="auth-card-head">
-                <h2>
-                  {authMode === "login"
-                    ? "Welcome back"
-                    : "Create your account"}
-                </h2>
+                <div className="auth-mobile-logo">
+                  CA
+                </div>
+
+                <h2>Welcome to CA Progress</h2>
 
                 <p>
-                  {authMode === "login"
-                    ? "Sign in to continue your preparation."
-                    : "Start tracking your CA preparation today."}
+                  Sign in or create an account securely with Google or your phone number.
                 </p>
+              </div>
+
+              <button
+                type="button"
+                className="auth-google"
+                onClick={handleGoogleSignIn}
+                disabled={submitting}
+              >
+                <span className="google-mark">G</span>
+                Continue with Google
+              </button>
+
+              <div className="auth-divider auth-method-divider">
+                <span>or use your phone number</span>
               </div>
 
               <form
@@ -626,61 +638,71 @@ export default function Tracker({
                 className="auth-form"
               >
                 <label>
-                  Email address
+                  Mobile number
 
                   <input
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="+91 98765 43210"
+                    value={phone}
                     onChange={(event) =>
-                      setEmail(
+                      setPhone(
                         event.target.value
                       )
                     }
+                    disabled={phoneOtpSent}
                     required
                   />
                 </label>
 
-                <label>
-                  Password
+                {phoneOtpSent && (
+                  <label>
+                    Verification code
 
-                  <input
-                    type="password"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(event) =>
-                      setPassword(
-                        event.target.value
-                      )
-                    }
-                    minLength={6}
-                    required
-                  />
-                </label>
-
-                {authMode === "login" && (
-                  <label className="auth-remember">
                     <input
-                      type="checkbox"
-                      checked={rememberOnDevice}
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="Enter 6-digit code"
+                      value={phoneOtp}
                       onChange={(event) =>
-                        setRememberOnDevice(
-                          event.target.checked
+                        setPhoneOtp(
+                          event.target.value.replace(
+                            /\D/g,
+                            ""
+                          ).slice(0, 6)
                         )
                       }
+                      minLength={6}
+                      maxLength={6}
+                      required
+                      autoFocus
                     />
-
-                    <span>
-                      <strong>
-                        Remember on this device
-                      </strong>
-
-                      <small>
-                        Stay signed in after closing your browser.
-                      </small>
-                    </span>
                   </label>
                 )}
+
+                <label className="auth-remember">
+                  <input
+                    type="checkbox"
+                    checked={rememberOnDevice}
+                    onChange={(event) =>
+                      setRememberOnDevice(
+                        event.target.checked
+                      )
+                    }
+                  />
+
+                  <span>
+                    <strong>
+                      Remember on this device
+                    </strong>
+
+                    <small>
+                      Stay signed in after closing your browser.
+                    </small>
+                  </span>
+                </label>
 
                 {authError && (
                   <div className="auth-error">
@@ -701,62 +723,26 @@ export default function Tracker({
                 >
                   {submitting
                     ? "Please wait..."
-                    : authMode === "login"
-                    ? "Sign in"
-                    : "Create account"}
+                    : phoneOtpSent
+                    ? "Verify and continue"
+                    : "Send verification code"}
                 </button>
 
-                <button
-                  type="button"
-                  className="auth-google"
-                  onClick={
-                    handleGoogleSignIn
-                  }
-                  disabled={submitting}
-                >
-                  Continue with Google
-                </button>
-
-                <div className="auth-divider">
-                  <span>
-                    or continue with email
-                  </span>
-                </div>
+                {phoneOtpSent && (
+                  <button
+                    type="button"
+                    className="auth-change-phone"
+                    onClick={() => {
+                      setPhoneOtpSent(false);
+                      setPhoneOtp("");
+                      setAuthError("");
+                      setAuthMessage("");
+                    }}
+                  >
+                    Change phone number
+                  </button>
+                )}
               </form>
-
-              <div className="auth-switch">
-                {authMode === "login"
-                  ? "Don't have an account?"
-                  : "Already have an account?"}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nextMode =
-                      authMode === "login"
-                        ? "signup"
-                        : "login";
-
-                    setAuthMode(
-                      nextMode
-                    );
-
-                    router.push(
-                      nextMode ===
-                        "signup"
-                        ? "/signup"
-                        : "/login"
-                    );
-
-                    setAuthError("");
-                    setAuthMessage("");
-                  }}
-                >
-                  {authMode === "login"
-                    ? "Create one"
-                    : "Sign in"}
-                </button>
-              </div>
 
               <button
                 type="button"
@@ -4271,6 +4257,7 @@ function AuthStyles() {
 
       .auth-right { display:flex; align-items:center; justify-content:center; padding:32px; }
       .auth-card { width:100%; max-width:430px; background:#fff; border:1px solid #e8ebf1; border-radius:22px; padding:42px; box-shadow:0 20px 70px rgba(25,38,68,.08); }
+      .auth-mobile-logo { display:none; width:46px; height:46px; place-items:center; margin:0 auto 18px; border-radius:14px; background:#edf3ff; color:#245ec2; font-size:17px; font-weight:800; }
       .auth-card-head h2 { margin:0; color:#182033; font-size:30px; letter-spacing:-1px; }
       .auth-card-head p { margin:9px 0 30px; color:#7c8595; line-height:1.6; font-size:14px; }
       .auth-form { display:grid; gap:17px; }
@@ -4286,10 +4273,15 @@ function AuthStyles() {
       .auth-submit,.auth-google { width:100%; height:50px; border-radius:11px; cursor:pointer; font-size:14px; font-weight:700; }
       .auth-submit { border:0; background:#245ec2; color:#fff; margin-top:4px; }
       .auth-submit:hover { background:#1d51aa; }
-      .auth-google { border:1px solid #dfe3eb; background:#fff; color:#293244; }
+      .auth-google { border:1px solid #dfe3eb; background:#fff; color:#293244; display:flex; align-items:center; justify-content:center; gap:10px; }
       .auth-google:hover { background:#f8f9fb; }
       .auth-submit:disabled,.auth-google:disabled { opacity:.65; cursor:not-allowed; }
       .auth-divider { text-align:center; color:#98a0ae; font-size:12px; }
+      .auth-method-divider { display:flex; align-items:center; gap:12px; margin:22px 0; white-space:nowrap; }
+      .auth-method-divider::before,.auth-method-divider::after { content:""; height:1px; background:#e7eaf0; flex:1; }
+      .google-mark { width:22px; height:22px; display:grid; place-items:center; border-radius:50%; background:linear-gradient(135deg,#4285f4 0 25%,#34a853 25% 50%,#fbbc05 50% 75%,#ea4335 75%); color:#fff; font-size:12px; font-weight:800; }
+      .auth-change-phone { border:0; background:transparent; color:#245ec2; font-size:12px; font-weight:700; cursor:pointer; justify-self:center; }
+      .auth-form input:disabled { background:#f4f6f9; color:#6f7887; }
 
       .auth-switch { margin-top:25px; text-align:center; color:#778092; font-size:13px; }
       .auth-switch button { border:0; background:none; color:#245ec2; font-weight:700; margin-left:6px; cursor:pointer; }
@@ -4303,22 +4295,20 @@ function AuthStyles() {
       .auth-config-warning { margin-top:20px; background:#fff8e8; color:#8a6316; }
 
       @media (max-width:850px) {
-        .auth-page { grid-template-columns:1fr; }
-        .auth-left { min-height:auto; padding:32px 24px 50px; }
-        .auth-hero { margin:65px 0 0; }
-        .auth-hero h1 { font-size:48px; }
-        .auth-footer { display:none; }
-        .auth-right { padding:28px 18px 40px; }
+        .auth-page { grid-template-columns:1fr; min-height:100dvh; background:#f5f7fb; }
+        .auth-left { display:none; }
+        .auth-right { min-height:100dvh; padding:28px 18px; }
         .auth-card { padding:30px 22px; }
+        .auth-mobile-logo { display:grid; }
+        .auth-card-head { text-align:center; }
       }
 
       @media (max-width:520px) {
-        .auth-left { padding:24px 18px 36px; }
-        .auth-hero { margin:42px 0 0; }
-        .auth-hero h1 { font-size:38px; letter-spacing:-2px; }
-        .auth-hero > p { font-size:14px; margin:18px 0 28px; }
-        .auth-right { padding:20px 14px 32px; }
-        .auth-card { padding:26px 18px; border-radius:17px; }
+        .auth-right { align-items:flex-start; padding:24px 14px; }
+        .auth-card { max-width:none; padding:28px 20px; border-radius:20px; box-shadow:0 14px 45px rgba(25,38,68,.07); }
+        .auth-card-head h2 { font-size:25px; }
+        .auth-card-head p { margin-bottom:25px; font-size:13px; }
+        .auth-submit,.auth-google { height:52px; }
       }
     `}</style>
   );
