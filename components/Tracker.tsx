@@ -276,6 +276,9 @@ export default function Tracker({
   const [submitting, setSubmitting] =
     useState(false);
 
+  const [showLoginPrompt, setShowLoginPrompt] =
+    useState(false);
+
   useEffect(() => {
     if (authPage) setAuthMode(authPage);
   }, [authPage]);
@@ -601,29 +604,37 @@ export default function Tracker({
   ======================================================= */
 
   return (
-    <TrackerDashboard
-      initialView={
-        initialView
-      }
-      email={
-        session?.user.email || ""
-      }
-      userId={
-        session?.user.id || null
-      }
-      onLogout={
-        handleLogout
-      }
-      onRequireAuth={() => {
-        setAuthMode("login");
-        setAuthError("");
-        setAuthMessage(
-          "Sign in or create an account to track and save your progress."
-        );
-        requireAuth();
-        router.push("/login");
-      }}
-    />
+    <>
+      <TrackerDashboard
+        initialView={initialView}
+        email={session?.user.email || ""}
+        userId={session?.user.id || null}
+        onLogout={handleLogout}
+        onRequireAuth={() => setShowLoginPrompt(true)}
+      />
+
+      {showLoginPrompt && (
+        <div
+          className="login-prompt-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowLoginPrompt(false);
+          }}
+        >
+          <section className="login-prompt" role="dialog" aria-modal="true" aria-labelledby="login-prompt-title">
+            <button className="login-prompt-close" onClick={() => setShowLoginPrompt(false)} aria-label="Close login prompt">×</button>
+            <div className="login-prompt-icon"><LogIn size={24} /></div>
+            <h2 id="login-prompt-title">Login required</h2>
+            <p>Please sign in or create an account to use this feature and securely sync your progress.</p>
+            <div className="login-prompt-actions">
+              <button className="login-prompt-primary" onClick={() => { setShowLoginPrompt(false); requireAuth(); router.push("/login"); }}>Sign in</button>
+              <button className="login-prompt-secondary" onClick={() => { setShowLoginPrompt(false); requireAuth(); router.push("/signup"); }}>Create account</button>
+            </div>
+            <button className="login-prompt-later" onClick={() => setShowLoginPrompt(false)}>Not now</button>
+          </section>
+        </div>
+      )}
+    </>
   );
 }
 
