@@ -3228,6 +3228,28 @@ function AuthStyles() {
           padding: 30px 22px;
         }
       }
+      .auth-google {
+  width: 100%;
+  height: 50px;
+  border: 1px solid #dfe3eb;
+  border-radius: 11px;
+  background: white;
+  color: #293244;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.auth-google:hover {
+  background: #f8f9fb;
+}
+
+.auth-divider {
+  text-align: center;
+  margin: 20px 0;
+  color: #98a0ae;
+  font-size: 12px;
+}
     `}</style>
   );
 }
