@@ -13,7 +13,7 @@ import {
 import { createClient, Session } from "@supabase/supabase-js";
 import { SubjectName } from "@/lib/syllabus";
 
-export type Stage = "done" | "revision1" | "revision2" | "testDone";
+export type Stage = "done" | "revision1" | "revision2" | "testDone" | "test2Done";
 export type Progress = Record<string, Partial<Record<Stage, boolean>>>;
 export type ActivityItem = { id: string; chapter: string; subject: string; stage: Stage; time: string };
 export type StudySessionItem = { id: string; subject: SubjectName; minutes: number; date: string };
