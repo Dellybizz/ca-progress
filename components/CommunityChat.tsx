@@ -42,6 +42,7 @@ const studyRooms = [
   ["accounting", "Accounting", "Practice accounting concepts together."],
   ["law", "Law", "Discuss important law concepts and cases."],
   ["costing", "Costing", "Solve costing questions with other students."],
+  ["fm-sm", "FM & SM", "Discuss Financial Management and Strategic Management."],
 ] as const;
 
 const channels = [...mainChannels, ...studyRooms] as const;
@@ -77,7 +78,7 @@ export default function CommunityChat({
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  const endRef = useRef<HTMLDivElement | null>(null);
+  const messagesRef = useRef<HTMLDivElement | null>(null);
   const displayName = useMemo(() => studentName(email), [email]);
 
   const currentChannel =
@@ -156,7 +157,13 @@ export default function CommunityChat({
   }, [activeChannel]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = messagesRef.current;
+    if (!container) return;
+
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: "smooth",
+    });
   }, [messages]);
 
   useEffect(() => {
@@ -267,7 +274,7 @@ export default function CommunityChat({
           <p>{currentChannel[2]}</p>
         </header>
 
-        <div className="chat-messages">
+        <div className="chat-messages" ref={messagesRef}>
           {activeChannel === "general" && !loading && (
             <div className="chat-pinned">
               <span className="pinned-icon"><BookOpen size={16} /></span>
@@ -316,7 +323,6 @@ export default function CommunityChat({
               );
             })
           )}
-          <div ref={endRef} />
         </div>
 
         <form className="chat-composer" onSubmit={sendMessage}>
