@@ -1867,6 +1867,8 @@ function TrackerDashboard({
             <CommunityChat
               userId={userId}
               email={email}
+              courseLevel={courseLevel}
+              subjects={subjects}
             />
           ) : null
         )}
