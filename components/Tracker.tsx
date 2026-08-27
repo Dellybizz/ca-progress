@@ -436,6 +436,7 @@ export default function Tracker({
     showLoginPrompt,
     setShowLoginPrompt,
   ] = useState(false);
+  const [showLogoutPrompt,setShowLogoutPrompt]=useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -540,10 +541,12 @@ export default function Tracker({
      LOGOUT
   ======================================================= */
 
-  const handleLogout =
-    async () => {
-      await signOut();
-    };
+  const handleLogout = () => setShowLogoutPrompt(true);
+  const confirmLogout = async () => {
+    await signOut();
+    setShowLogoutPrompt(false);
+    router.push("/dashboard");
+  };
 
   /* =======================================================
      LOADING
@@ -969,6 +972,7 @@ export default function Tracker({
           </section>
         </div>
       )}
+      {showLogoutPrompt&&<div className="login-prompt-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)setShowLogoutPrompt(false)}}><section className="login-prompt logout-confirm" role="dialog" aria-modal="true" aria-labelledby="logout-confirm-title"><div className="login-prompt-icon"><LogOut size={24}/></div><h2 id="logout-confirm-title">Would you like to logout?</h2><p>Your saved progress will remain securely connected to your account.</p><div className="login-prompt-actions"><button className="logout-confirm-button" onClick={()=>void confirmLogout()}>Logout</button><button className="login-prompt-secondary" onClick={()=>setShowLogoutPrompt(false)}>Cancel</button></div></section></div>}
     </>
   );
 }
