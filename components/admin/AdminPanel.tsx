@@ -934,7 +934,14 @@ export default function AdminPanel() {
   );
 
   return (
-    <main className="admin-shell">
+    <main
+      className="admin-shell"
+      style={
+        tab === "sections"
+          ? { gridTemplateColumns: "170px minmax(0,1fr)" }
+          : undefined
+      }
+    >
       <aside className="admin-nav">
         <button type="button" onClick={goBack} className="admin-back">
           <ArrowLeft size={16} />
@@ -968,7 +975,10 @@ export default function AdminPanel() {
           </button>
         </div>
       </aside>
-      <section className="admin-main">
+      <section
+        className="admin-main"
+        style={tab === "sections" ? { padding: 16 } : undefined}
+      >
         <header>
           <div>
             <h1>{tabs.find((x) => x[0] === tab)?.[1]}</h1>

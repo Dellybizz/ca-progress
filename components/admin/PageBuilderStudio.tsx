@@ -72,6 +72,31 @@ export default function PageBuilderStudio() {
     setPages((p.data || []) as Page[]);
     let loadedItems = (e.data || []) as AppPageElement[];
     let schemaChanged = false;
+    for (const page of (p.data || []) as Page[]) {
+      if (page.section_key === "dashboard") continue;
+      const hasNativeRoot = loadedItems.some(
+        (item) =>
+          item.page_key === page.section_key &&
+          item.element_key === "native-content",
+      );
+      if (hasNativeRoot) continue;
+      await supabase.from("app_page_elements").insert({
+        page_key: page.section_key,
+        element_key: "native-content",
+        parent_key: null,
+        region: "main",
+        element_type: "section",
+        label: page.label,
+        description: `Built-in ${page.label} application content`,
+        enabled: true,
+        audience: "all",
+        minimum_plan_rank: 0,
+        sort_order: 100,
+        config: { variant: "native" },
+        appearance: { padding: 0 },
+      });
+      schemaChanged = true;
+    }
     for (const schema of nativePageSections) {
       const editorPreset = /heading|header/.test(schema.key)
         ? "heading"
@@ -376,6 +401,22 @@ export default function PageBuilderStudio() {
             <Smartphone />
           </button>
         </div>
+        <div className="device-switch history-switch">
+          <button
+            disabled={!undoStack.current.length}
+            onClick={undo}
+            title="Undo"
+          >
+            <Undo2 />
+          </button>
+          <button
+            disabled={!redoStack.current.length}
+            onClick={redo}
+            title="Redo"
+          >
+            <Redo2 />
+          </button>
+        </div>
         <button
           className="save-button"
           disabled={!selected || busy}
@@ -385,7 +426,13 @@ export default function PageBuilderStudio() {
           {busy ? "Saving…" : "Save"}
         </button>
       </header>
-      <div className="editor-body">
+      <div
+        className="editor-body"
+        style={{
+          gridTemplateColumns:
+            "clamp(190px,15vw,230px) minmax(500px,1fr) clamp(250px,20vw,290px)",
+        }}
+      >
         <aside className="section-sidebar">
           <header>
             <b>Template</b>
@@ -433,7 +480,10 @@ export default function PageBuilderStudio() {
           </div>
         </aside>
         <main className="preview-stage">
-          <div className={`store-preview ${device}`}>
+          <div
+            className={`store-preview ${device}`}
+            style={{ overflow: "hidden" }}
+          >
             <div className="preview-bar">
               <i />
               <i />
@@ -448,11 +498,14 @@ export default function PageBuilderStudio() {
               onLoad={sendPreview}
               style={{
                 display: "block",
-                width: "100%",
-                height: device === "mobile" ? 720 : "calc(100dvh - 255px)",
+                width: device === "desktop" ? "125%" : "100%",
+                height:
+                  device === "mobile" ? 720 : "calc((100dvh - 255px) / .8)",
                 minHeight: 568,
                 border: 0,
                 background: "#f8fafc",
+                transform: device === "desktop" ? "scale(.8)" : "none",
+                transformOrigin: "top left",
               }}
             />
           </div>
@@ -568,22 +621,6 @@ export default function PageBuilderStudio() {
             </div>
           )}
         </aside>
-      </div>
-      <div className="device-switch history-switch">
-        <button
-          disabled={!undoStack.current.length}
-          onClick={undo}
-          title="Undo"
-        >
-          <Undo2 />
-        </button>
-        <button
-          disabled={!redoStack.current.length}
-          onClick={redo}
-          title="Redo"
-        >
-          <Redo2 />
-        </button>
       </div>
       {adding && (
         <div className="add-drawer" onClick={() => setAdding(null)}>
