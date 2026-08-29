@@ -276,6 +276,93 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [sectionRules, setSectionRules] = useState<AppSectionRule[]>([]);
   const [pageElements, setPageElements] = useState<AppPageElement[]>([]);
+  useEffect(() => {
+    const receiveBuilderPreview = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type !== "ca-page-builder-preview") return;
+      if (!Array.isArray(event.data.elements)) return;
+      const elements = event.data.elements as AppPageElement[];
+      setPageElements(elements);
+      window.requestAnimationFrame(() => {
+        document
+          .querySelectorAll(".ca-builder-selected")
+          .forEach((node) => node.classList.remove("ca-builder-selected"));
+        const fallbackSelectors: Record<string, string> = {
+          "exam-countdown": ".exam-card",
+          "daily-streak": ".streak-card",
+          "overall-progress": ".overall-card",
+          "activity-progress": ".activity-progress",
+          "study-week": ".study-card",
+          "subject-progress": ".subject-panel",
+          "recent-activity": ".recent-panel",
+          "quick-actions": ".quick-panel",
+        };
+        elements.forEach((item) => {
+          const selector = String(
+            item.config?.selector ||
+              fallbackSelectors[item.element_key] ||
+              `[data-builder-element-key="${item.element_key}"]`,
+          );
+          document.querySelectorAll<HTMLElement>(selector).forEach((node) => {
+            node.dataset.builderElementKey = item.element_key;
+            node.style.display = item.enabled ? "" : "none";
+            node.style.backgroundColor = String(
+              item.appearance?.backgroundColor || "",
+            );
+            node.style.color = String(item.appearance?.textColor || "");
+            node.style.borderRadius = item.appearance?.borderRadius
+              ? `${Number(item.appearance.borderRadius)}px`
+              : "";
+            node.style.padding = item.appearance?.padding
+              ? `${Number(item.appearance.padding)}px`
+              : "";
+            node.style.maxWidth = item.appearance?.maxWidth
+              ? `${Number(item.appearance.maxWidth)}px`
+              : "";
+            node.style.borderColor = String(item.appearance?.borderColor || "");
+            if (item.config?.editorPreset === "heading") {
+              const heading = node.querySelector<HTMLElement>("h1,h2,h3");
+              const description = node.querySelector<HTMLElement>("p");
+              if (heading && item.label) heading.textContent = item.label;
+              if (description) description.textContent = item.description;
+            }
+            if (item.element_key === event.data.selectedElementKey)
+              node.classList.add("ca-builder-selected");
+          });
+        });
+        if (!document.getElementById("ca-builder-preview-style")) {
+          const style = document.createElement("style");
+          style.id = "ca-builder-preview-style";
+          style.textContent =
+            ".ca-builder-selected{outline:3px solid #2863c7!important;outline-offset:2px!important;position:relative!important}";
+          document.head.appendChild(style);
+        }
+      });
+    };
+    window.addEventListener("message", receiveBuilderPreview);
+    return () => window.removeEventListener("message", receiveBuilderPreview);
+  }, []);
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has("builderPreview"))
+      return;
+    const selectSection = (event: MouseEvent) => {
+      const target = (event.target as HTMLElement).closest<HTMLElement>(
+        "[data-builder-element-key]",
+      );
+      if (!target?.dataset.builderElementKey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      window.parent.postMessage(
+        {
+          type: "ca-page-builder-select",
+          elementKey: target.dataset.builderElementKey,
+        },
+        window.location.origin,
+      );
+    };
+    document.addEventListener("click", selectSection, true);
+    return () => document.removeEventListener("click", selectSection, true);
+  }, []);
   const [examAttempts, setExamAttempts] = useState<AppExamAttempt[]>([]);
   const [featureAccess, setFeatureAccess] = useState<
     Record<string, FeatureAccess>
