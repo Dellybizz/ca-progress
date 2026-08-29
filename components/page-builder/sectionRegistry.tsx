@@ -4,6 +4,7 @@ import { AppPageElement } from "@/context/ProgressContext";
 import { SectionDefinition, SettingField } from "./sections/types";
 import {
   nativeDefinition,
+  nativePresetDefinitions,
   nativeReferenceDefinition,
 } from "./sections/NativeSection";
 import { richTextDefinition } from "./sections/RichTextSection";
@@ -31,9 +32,9 @@ export const definitionFor = (item: AppPageElement) => {
   const explicit = String(item.config?.variant || "");
   if (explicit)
     return sectionRegistry[explicit] || sectionRegistry["rich-text"];
-  return item.element_key === "native-content"
-    ? sectionRegistry.native
-    : sectionRegistry["native-reference"];
+  if (item.element_key === "native-content") return sectionRegistry.native;
+  const preset = String(item.config?.editorPreset || "");
+  return nativePresetDefinitions[preset] || sectionRegistry["native-reference"];
 };
 
 export function BuilderSection({
