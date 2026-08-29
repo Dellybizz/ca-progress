@@ -2,7 +2,10 @@
 
 import { CSSProperties, ReactNode } from "react";
 import { AppPageElement, FeatureAccess } from "@/context/ProgressContext";
-import { BuilderSection } from "@/components/page-builder/sectionRegistry";
+import {
+  BuilderSection,
+  definitionFor,
+} from "@/components/page-builder/sectionRegistry";
 
 type Props = {
   pageKey: string;
@@ -60,12 +63,23 @@ export default function DynamicPageLayout({
       isVisible(item, signedIn, planRank, isAdmin, featureAccess),
     )
     .sort((a, b) => a.sort_order - b.sort_order);
+  const renderableItems = pageItems.filter(
+    (item) =>
+      item.element_key === "native-content" ||
+      definitionFor(item).type !== "native-reference",
+  );
 
   // Existing installations without page-builder seeds keep their normal view.
   if (!allPageItems.length) return <>{children}</>;
 
-  const output = pageItems.map((item) =>
-    item.element_key === "native-content" ? (
+  if (
+    !renderableItems.length &&
+    !allPageItems.some((item) => item.element_key === "native-content")
+  )
+    return <>{children}</>;
+
+  const output = renderableItems.map((item) => {
+    return item.element_key === "native-content" ? (
       <div
         className="dynamic-native-section"
         style={styleFor(item)}
@@ -82,8 +96,8 @@ export default function DynamicPageLayout({
       >
         <BuilderSection item={item} />
       </div>
-    ),
-  );
+    );
+  });
 
   // Never make a page blank because an older database lacks the native record.
   if (!allPageItems.some((item) => item.element_key === "native-content")) {
@@ -95,6 +109,7 @@ export default function DynamicPageLayout({
       {output}
       <style>{`
         .dynamic-page-layout{display:flex;flex-direction:column;gap:16px;min-width:0}
+        .dynamic-builder-section:empty{display:none}
         .dynamic-native-section{min-width:0;background:transparent!important;color:inherit!important;border-color:transparent!important;padding:0!important}
         .registry-section{border:1px solid;display:flex;align-items:center;gap:22px;min-width:0;overflow:hidden;box-sizing:border-box}
         .registry-section img{width:min(280px,38%);max-height:220px;object-fit:cover;border-radius:12px}
