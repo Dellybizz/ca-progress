@@ -2,6 +2,7 @@
 
 import { CSSProperties, ReactNode } from "react";
 import { AppPageElement, FeatureAccess } from "@/context/ProgressContext";
+import { BuilderSection } from "@/components/page-builder/sectionRegistry";
 
 type Props = {
   pageKey: string;
@@ -44,33 +45,6 @@ const styleFor = (item: AppPageElement): CSSProperties => ({
     (item.appearance?.alignment as CSSProperties["textAlign"]) || "left",
 });
 
-function ConfigurableBlock({ item }: { item: AppPageElement }) {
-  const variant = String(item.config?.variant || "text");
-  const buttonLabel = String(item.config?.buttonLabel || "");
-  const route = String(item.config?.route || "");
-  const imageUrl = String(item.config?.imageUrl || "");
-
-  if (variant === "spacer") {
-    return (
-      <div aria-hidden style={{ height: Number(item.config?.height || 24) }} />
-    );
-  }
-
-  return (
-    <section
-      className={`dynamic-page-block dynamic-page-block--${variant}`}
-      style={styleFor(item)}
-    >
-      {imageUrl && <img src={imageUrl} alt="" />}
-      <div>
-        {item.label && <h2>{item.label}</h2>}
-        {item.description && <p>{item.description}</p>}
-        {buttonLabel && route && <a href={route}>{buttonLabel}</a>}
-      </div>
-    </section>
-  );
-}
-
 export default function DynamicPageLayout({
   pageKey,
   elements,
@@ -80,8 +54,6 @@ export default function DynamicPageLayout({
   featureAccess,
   children,
 }: Props) {
-  if (pageKey === "dashboard") return <>{children}</>;
-
   const allPageItems = elements.filter((item) => item.page_key === pageKey);
   const pageItems = allPageItems
     .filter((item) =>
@@ -102,7 +74,7 @@ export default function DynamicPageLayout({
         {children}
       </div>
     ) : (
-      <ConfigurableBlock item={item} key={item.id} />
+      <BuilderSection item={item} key={item.id} />
     ),
   );
 
@@ -117,14 +89,12 @@ export default function DynamicPageLayout({
       <style>{`
         .dynamic-page-layout{display:flex;flex-direction:column;gap:16px;min-width:0}
         .dynamic-native-section{min-width:0;background:transparent!important;color:inherit!important;border-color:transparent!important;padding:0!important}
-        .dynamic-page-block{border:1px solid;display:flex;align-items:center;gap:18px;min-width:0;overflow:hidden}
-        .dynamic-page-block img{width:min(180px,32%);max-height:140px;object-fit:cover;border-radius:12px}
-        .dynamic-page-block h2{margin:0 0 7px;font-size:20px}
-        .dynamic-page-block p{margin:0;opacity:.78;line-height:1.6;white-space:pre-wrap}
-        .dynamic-page-block a{display:inline-flex;margin-top:14px;padding:10px 15px;border-radius:9px;background:#2863c7;color:#fff;text-decoration:none;font-weight:750;font-size:12px}
-        .dynamic-page-block--notice{border-left:4px solid #2863c7}
-        .dynamic-page-block--hero{min-height:180px}
-        @media(max-width:650px){.dynamic-page-layout{gap:12px}.dynamic-page-block{padding:16px!important;align-items:flex-start;flex-direction:column}.dynamic-page-block img{width:100%;max-height:180px}.dynamic-page-block h2{font-size:17px}}
+        .registry-section{border:1px solid;display:flex;align-items:center;gap:22px;min-width:0;overflow:hidden;box-sizing:border-box}
+        .registry-section img{width:min(280px,38%);max-height:220px;object-fit:cover;border-radius:12px}
+        .registry-section h2{margin:0 0 8px;font-size:22px}.registry-section p{margin:0;opacity:.78;line-height:1.6;white-space:pre-wrap}
+        .registry-section a{display:inline-flex;margin-top:15px;padding:10px 16px;border-radius:9px;background:#2863c7;color:#fff;text-decoration:none;font-weight:750;font-size:12px}
+        .registry-banner{border-left:4px solid #2863c7}.registry-hero{min-height:220px}
+        @media(max-width:650px){.dynamic-page-layout{gap:12px}.registry-section{padding:18px!important;align-items:flex-start;flex-direction:column}.registry-section img{width:100%;max-height:200px}.registry-section h2{font-size:19px}}
       `}</style>
     </div>
   );
