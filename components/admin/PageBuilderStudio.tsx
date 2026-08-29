@@ -15,6 +15,8 @@ import {
   Save,
   Smartphone,
   Trash2,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import { AppPageElement } from "@/context/ProgressContext";
 import {
@@ -22,6 +24,7 @@ import {
   sectionRegistry,
   SettingField,
 } from "@/components/page-builder/sectionRegistry";
+import { nativePageSections } from "@/components/page-builder/page-schemas";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL,
   key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -53,6 +56,8 @@ export default function PageBuilderStudio() {
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
   const previewRef = useRef<HTMLIFrameElement>(null);
+  const undoStack = useRef<AppPageElement[][]>([]);
+  const redoStack = useRef<AppPageElement[][]>([]);
   const load = async () => {
     if (!supabase) return;
     const [p, e, pl, f] = await Promise.all([
@@ -65,7 +70,64 @@ export default function PageBuilderStudio() {
       supabase.from("app_features").select("feature_key,name").order("name"),
     ]);
     setPages((p.data || []) as Page[]);
-    setItems((e.data || []) as AppPageElement[]);
+    let loadedItems = (e.data || []) as AppPageElement[];
+    let schemaChanged = false;
+    for (const schema of nativePageSections) {
+      const editorPreset = /heading|header/.test(schema.key)
+        ? "heading"
+        : /form|composer|toolbar/.test(schema.key)
+          ? "form"
+          : schema.pageKey === "dashboard"
+            ? "card"
+            : "container";
+      const existing = loadedItems.find(
+        (item) =>
+          item.page_key === schema.pageKey && item.element_key === schema.key,
+      );
+      if (existing) {
+        if (
+          existing.config?.selector === schema.selector &&
+          existing.config?.editorPreset === editorPreset
+        )
+          continue;
+        await supabase
+          .from("app_page_elements")
+          .update({
+            config: {
+              ...existing.config,
+              selector: schema.selector,
+              editorPreset,
+            },
+          })
+          .eq("id", existing.id);
+        schemaChanged = true;
+        continue;
+      }
+      await supabase.from("app_page_elements").insert({
+        page_key: schema.pageKey,
+        element_key: schema.key,
+        parent_key: schema.parentKey || null,
+        region: "main",
+        element_type: "section",
+        label: schema.label,
+        description: schema.description,
+        enabled: true,
+        audience: "all",
+        minimum_plan_rank: 0,
+        sort_order: 200 + nativePageSections.indexOf(schema),
+        config: { selector: schema.selector, editorPreset },
+        appearance: {},
+      });
+      schemaChanged = true;
+    }
+    if (schemaChanged) {
+      const refreshed = await supabase
+        .from("app_page_elements")
+        .select("*")
+        .order("sort_order");
+      loadedItems = (refreshed.data || loadedItems) as AppPageElement[];
+    }
+    setItems(loadedItems);
     setPlans((pl.data || []) as Plan[]);
     setFeatures((f.data || []) as Feature[]);
   };
@@ -85,12 +147,31 @@ export default function PageBuilderStudio() {
     pages.find((page) => page.section_key === pageKey)?.route || "/dashboard";
   const sendPreview = () =>
     previewRef.current?.contentWindow?.postMessage(
-      { type: "ca-page-builder-preview", pageKey, elements: items },
+      {
+        type: "ca-page-builder-preview",
+        pageKey,
+        elements: items,
+        selectedElementKey: selected?.element_key || null,
+      },
       window.location.origin,
     );
   useEffect(() => {
     const timer = window.setTimeout(sendPreview, 80);
     return () => window.clearTimeout(timer);
+  }, [items, pageKey, selectedId]);
+  useEffect(() => {
+    const receiveSelection = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type !== "ca-page-builder-select") return;
+      const match = items.find(
+        (item) =>
+          item.page_key === pageKey &&
+          item.element_key === event.data.elementKey,
+      );
+      if (match) setSelectedId(match.id);
+    };
+    window.addEventListener("message", receiveSelection);
+    return () => window.removeEventListener("message", receiveSelection);
   }, [items, pageKey]);
   useEffect(() => {
     if (!pageItems.some((x) => x.id === selectedId))
@@ -100,28 +181,61 @@ export default function PageBuilderStudio() {
       setNotice(text);
       window.setTimeout(() => setNotice(""), 2200);
     },
-    update = (patch: Partial<AppPageElement>) =>
-      selected &&
-      setItems((all) =>
-        all.map((x) => (x.id === selected.id ? { ...x, ...patch } : x)),
-      );
+    update = (patch: Partial<AppPageElement>) => {
+      if (!selected) return;
+      setItems((all) => {
+        undoStack.current.push(all);
+        if (undoStack.current.length > 60) undoStack.current.shift();
+        redoStack.current = [];
+        return all.map((x) => (x.id === selected.id ? { ...x, ...patch } : x));
+      });
+    };
+  const updateById = (id: string, patch: Partial<AppPageElement>) => {
+    setItems((all) => {
+      undoStack.current.push(all);
+      if (undoStack.current.length > 60) undoStack.current.shift();
+      redoStack.current = [];
+      return all.map((item) => (item.id === id ? { ...item, ...patch } : item));
+    });
+  };
+  const undo = () => {
+    const previous = undoStack.current.pop();
+    if (!previous) return;
+    setItems((current) => {
+      redoStack.current.push(current);
+      return previous;
+    });
+  };
+  const redo = () => {
+    const next = redoStack.current.pop();
+    if (!next) return;
+    setItems((current) => {
+      undoStack.current.push(current);
+      return next;
+    });
+  };
   const save = async () => {
     if (!supabase || !selected) return;
     setBusy(true);
-    const { error } = await supabase
-      .from("app_page_elements")
-      .update({
-        label: selected.label,
-        description: selected.description,
-        enabled: selected.enabled,
-        audience: selected.audience,
-        minimum_plan_rank: selected.minimum_plan_rank,
-        parent_key: selected.parent_key,
-        sort_order: selected.sort_order,
-        config: selected.config,
-        appearance: selected.appearance,
-      })
-      .eq("id", selected.id);
+    const results = await Promise.all(
+      pageItems.map((item) =>
+        supabase
+          .from("app_page_elements")
+          .update({
+            label: item.label,
+            description: item.description,
+            enabled: item.enabled,
+            audience: item.audience,
+            minimum_plan_rank: item.minimum_plan_rank,
+            parent_key: item.parent_key,
+            sort_order: item.sort_order,
+            config: item.config,
+            appearance: item.appearance,
+          })
+          .eq("id", item.id),
+      ),
+    );
+    const error = results.find((result) => result.error)?.error;
     setBusy(false);
     flash(error ? error.message : "Saved");
   };
@@ -194,22 +308,22 @@ export default function PageBuilderStudio() {
     setSelectedId((data as AppPageElement).id);
   };
   const move = async (dir: -1 | 1) => {
-    if (!supabase || !selected) return;
+    if (!selected) return;
     const peers = pageItems.filter((x) => x.parent_key === selected.parent_key),
       index = peers.findIndex((x) => x.id === selected.id),
       other = peers[index + dir];
     if (!other) return;
-    await Promise.all([
-      supabase
-        .from("app_page_elements")
-        .update({ sort_order: other.sort_order })
-        .eq("id", selected.id),
-      supabase
-        .from("app_page_elements")
-        .update({ sort_order: selected.sort_order })
-        .eq("id", other.id),
-    ]);
-    void load();
+    setItems((all) => {
+      undoStack.current.push(all);
+      redoStack.current = [];
+      return all.map((item) =>
+        item.id === selected.id
+          ? { ...item, sort_order: other.sort_order }
+          : item.id === other.id
+            ? { ...item, sort_order: selected.sort_order }
+            : item,
+      );
+    });
   };
   const fieldValue = (field: SettingField) =>
     field.target === "appearance"
@@ -230,7 +344,10 @@ export default function PageBuilderStudio() {
   };
   return (
     <div className="theme-editor">
-      <header className="editor-topbar">
+      <header
+        className="editor-topbar"
+        style={{ gridTemplateColumns: "1fr auto auto auto auto" }}
+      >
         <div>
           <b>Page editor</b>
           <span>Changes affect the live application</span>
@@ -282,11 +399,7 @@ export default function PageBuilderStudio() {
                   active={selectedId === root.id}
                   onSelect={() => setSelectedId(root.id)}
                   onToggle={() =>
-                    setItems((all) =>
-                      all.map((x) =>
-                        x.id === root.id ? { ...x, enabled: !x.enabled } : x,
-                      ),
-                    )
+                    updateById(root.id, { enabled: !root.enabled })
                   }
                 />
                 {pageItems
@@ -299,13 +412,7 @@ export default function PageBuilderStudio() {
                       active={selectedId === child.id}
                       onSelect={() => setSelectedId(child.id)}
                       onToggle={() =>
-                        setItems((all) =>
-                          all.map((x) =>
-                            x.id === child.id
-                              ? { ...x, enabled: !x.enabled }
-                              : x,
-                          ),
-                        )
+                        updateById(child.id, { enabled: !child.enabled })
                       }
                     />
                   ))}
@@ -461,6 +568,22 @@ export default function PageBuilderStudio() {
             </div>
           )}
         </aside>
+      </div>
+      <div className="device-switch history-switch">
+        <button
+          disabled={!undoStack.current.length}
+          onClick={undo}
+          title="Undo"
+        >
+          <Undo2 />
+        </button>
+        <button
+          disabled={!redoStack.current.length}
+          onClick={redo}
+          title="Redo"
+        >
+          <Redo2 />
+        </button>
       </div>
       {adding && (
         <div className="add-drawer" onClick={() => setAdding(null)}>
