@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 
 import CommunityChat from "@/components/CommunityChat";
+import DynamicPageLayout from "@/components/DynamicPageLayout";
 
 import {
   CourseGroup,
@@ -56,6 +57,7 @@ import {
 import {
   ActivityItem,
   AppPageElement,
+  AppExamAttempt,
   CalendarItem,
   GoalItem,
   NoteItem,
@@ -85,28 +87,62 @@ type View =
   | "Notes"
   | "Settings";
 
-type ExamAttempt={id:string;label:string;date:string};
-const examAttempts:Record<CourseLevel,ExamAttempt[]>={
-  Foundation:[
-    {id:"foundation-sep-2026",label:"September 2026",date:"2026-09-02T14:00:00+05:30"},
-    {id:"foundation-jan-2027",label:"January 2027",date:"2027-01-01T14:00:00+05:30"},
-    {id:"foundation-may-2027",label:"May 2027",date:"2027-05-01T14:00:00+05:30"},
+type ExamAttempt = { id: string; label: string; date: string };
+const fallbackExamAttempts: Record<CourseLevel, ExamAttempt[]> = {
+  Foundation: [
+    {
+      id: "foundation-sep-2026",
+      label: "September 2026",
+      date: "2026-09-02T14:00:00+05:30",
+    },
+    {
+      id: "foundation-jan-2027",
+      label: "January 2027",
+      date: "2027-01-01T14:00:00+05:30",
+    },
+    {
+      id: "foundation-may-2027",
+      label: "May 2027",
+      date: "2027-05-01T14:00:00+05:30",
+    },
   ],
-  Intermediate:[
-    {id:"inter-sep-2026",label:"September 2026",date:"2026-09-01T14:00:00+05:30"},
-    {id:"inter-jan-2027",label:"January 2027",date:"2027-01-01T14:00:00+05:30"},
-    {id:"inter-may-2027",label:"May 2027",date:"2027-05-01T14:00:00+05:30"},
+  Intermediate: [
+    {
+      id: "inter-sep-2026",
+      label: "September 2026",
+      date: "2026-09-01T14:00:00+05:30",
+    },
+    {
+      id: "inter-jan-2027",
+      label: "January 2027",
+      date: "2027-01-01T14:00:00+05:30",
+    },
+    {
+      id: "inter-may-2027",
+      label: "May 2027",
+      date: "2027-05-01T14:00:00+05:30",
+    },
   ],
-  Final:[
-    {id:"final-nov-2026",label:"November 2026",date:"2026-11-02T14:00:00+05:30"},
-    {id:"final-may-2027",label:"May 2027",date:"2027-05-01T14:00:00+05:30"},
-    {id:"final-nov-2027",label:"November 2027",date:"2027-11-01T14:00:00+05:30"},
+  Final: [
+    {
+      id: "final-nov-2026",
+      label: "November 2026",
+      date: "2026-11-02T14:00:00+05:30",
+    },
+    {
+      id: "final-may-2027",
+      label: "May 2027",
+      date: "2027-05-01T14:00:00+05:30",
+    },
+    {
+      id: "final-nov-2027",
+      label: "November 2027",
+      date: "2027-11-01T14:00:00+05:30",
+    },
   ],
 };
 
-type AuthMode =
-  | "login"
-  | "signup";
+type AuthMode = "login" | "signup";
 
 /* =========================================================
    CONSTANTS
@@ -144,10 +180,7 @@ const stages: {
   },
 ];
 
-const stagePrerequisites: Record<
-  Stage,
-  Stage | null
-> = {
+const stagePrerequisites: Record<Stage, Stage | null> = {
   done: null,
   revision1: "done",
   revision2: "revision1",
@@ -155,22 +188,12 @@ const stagePrerequisites: Record<
   test2Done: "testDone",
 };
 
-const stageDependsOn = (
-  stage: Stage,
-  earlierStage: Stage
-): boolean => {
-  const prerequisite =
-    stagePrerequisites[stage];
+const stageDependsOn = (stage: Stage, earlierStage: Stage): boolean => {
+  const prerequisite = stagePrerequisites[stage];
 
   return (
     prerequisite === earlierStage ||
-    Boolean(
-      prerequisite &&
-        stageDependsOn(
-          prerequisite,
-          earlierStage
-        )
-    )
+    Boolean(prerequisite && stageDependsOn(prerequisite, earlierStage))
   );
 };
 
@@ -228,17 +251,9 @@ const menu: {
   },
 ];
 
-const publicViews: View[] = [
-  "Dashboard",
-  "Subjects",
-  "Chapters",
-  "Settings",
-];
+const publicViews: View[] = ["Dashboard", "Subjects", "Chapters", "Settings"];
 
-const viewRoutes: Record<
-  View,
-  string
-> = {
+const viewRoutes: Record<View, string> = {
   Dashboard: "/dashboard",
   Community: "/community",
   Subjects: "/subjects",
@@ -373,10 +388,7 @@ const subjectMeta: Record<
   },
 };
 
-const stageCopy: Record<
-  Stage,
-  string
-> = {
+const stageCopy: Record<Stage, string> = {
   done: "Marked as Completed",
   revision1: "1st Revision Completed",
   revision2: "2nd Revision Completed",
@@ -384,10 +396,7 @@ const stageCopy: Record<
   test2Done: "Test 2 Completed",
 };
 
-const keyFor = (
-  subject: string,
-  chapter: string
-) => {
+const keyFor = (subject: string, chapter: string) => {
   return `${subject}::${chapter}`;
 };
 
@@ -417,46 +426,22 @@ export default function Tracker({
     requireAuth,
   } = useProgress();
 
-  const [
-    phone,
-    setPhone,
-  ] = useState("");
+  const [phone, setPhone] = useState("");
 
-  const [
-    phoneOtp,
-    setPhoneOtp,
-  ] = useState("");
+  const [phoneOtp, setPhoneOtp] = useState("");
 
-  const [
-    phoneOtpSent,
-    setPhoneOtpSent,
-  ] = useState(false);
+  const [phoneOtpSent, setPhoneOtpSent] = useState(false);
 
-  const [
-    authError,
-    setAuthError,
-  ] = useState("");
+  const [authError, setAuthError] = useState("");
 
-  const [
-    authMessage,
-    setAuthMessage,
-  ] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
 
-  const [
-    submitting,
-    setSubmitting,
-  ] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const [
-    rememberOnDevice,
-    setRememberOnDevice,
-  ] = useState(true);
+  const [rememberOnDevice, setRememberOnDevice] = useState(true);
 
-  const [
-    showLoginPrompt,
-    setShowLoginPrompt,
-  ] = useState(false);
-  const [showLogoutPrompt,setShowLogoutPrompt]=useState(false);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [showLogoutPrompt, setShowLogoutPrompt] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -464,20 +449,13 @@ export default function Tracker({
     if (session && authPage) {
       router.replace("/dashboard");
     }
-  }, [
-    authLoading,
-    authPage,
-    router,
-    session,
-  ]);
+  }, [authLoading, authPage, router, session]);
 
   /* =======================================================
      PHONE OTP LOGIN
   ======================================================= */
 
-  const handleAuth = async (
-    event: FormEvent
-  ) => {
+  const handleAuth = async (event: FormEvent) => {
     event.preventDefault();
 
     setAuthError("");
@@ -488,9 +466,7 @@ export default function Tracker({
       const digits = phone.replace(/\D/g, "");
 
       if (digits.length < 10) {
-        setAuthError(
-          "Enter a valid mobile number with country code."
-        );
+        setAuthError("Enter a valid mobile number with country code.");
         return;
       }
 
@@ -498,64 +474,51 @@ export default function Tracker({
         digits.length === 10
           ? `+91${digits}`
           : phone.trim().startsWith("+")
-          ? `+${digits}`
-          : `+${digits}`;
+            ? `+${digits}`
+            : `+${digits}`;
 
       if (!phoneOtpSent) {
-        const error = await sendPhoneOtp(
-          normalizedPhone,
-          rememberOnDevice
-        );
+        const error = await sendPhoneOtp(normalizedPhone, rememberOnDevice);
 
         if (error) setAuthError(error);
         else {
           setPhoneOtpSent(true);
-          setAuthMessage(
-            `Verification code sent to ${normalizedPhone}.`
-          );
+          setAuthMessage(`Verification code sent to ${normalizedPhone}.`);
         }
       } else {
         const error = await verifyPhoneOtp(
           normalizedPhone,
           phoneOtp.trim(),
-          rememberOnDevice
+          rememberOnDevice,
         );
 
         if (error) setAuthError(error);
       }
     } catch {
-      setAuthError(
-        "Something went wrong. Please try again."
-      );
+      setAuthError("Something went wrong. Please try again.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleGoogleSignIn =
-    async () => {
-      setAuthError("");
-      setAuthMessage("");
-      setSubmitting(true);
+  const handleGoogleSignIn = async () => {
+    setAuthError("");
+    setAuthMessage("");
+    setSubmitting(true);
 
-      try {
-        const error =
-          await signInWithGoogle(
-            rememberOnDevice
-          );
+    try {
+      const error = await signInWithGoogle(rememberOnDevice);
 
-        if (error) {
-          setAuthError(error);
-          setSubmitting(false);
-        }
-      } catch {
-        setAuthError(
-          "Unable to continue with Google. Please try again."
-        );
-
+      if (error) {
+        setAuthError(error);
         setSubmitting(false);
       }
-    };
+    } catch {
+      setAuthError("Unable to continue with Google. Please try again.");
+
+      setSubmitting(false);
+    }
+  };
 
   /* =======================================================
      LOGOUT
@@ -577,9 +540,7 @@ export default function Tracker({
       <div className="auth-loading">
         <div className="auth-spinner" />
 
-        <p>
-          Loading CA Progress...
-        </p>
+        <p>Loading CA Progress...</p>
 
         <style>{`
           .auth-loading {
@@ -617,111 +578,75 @@ export default function Tracker({
      AUTH SCREEN
   ======================================================= */
 
-  if (
-    session &&
-    authPage
-  ) {
+  if (session && authPage) {
     return (
       <div className="auth-loading">
         <div className="auth-spinner" />
 
-        <p>
-          Opening your dashboard...
-        </p>
+        <p>Opening your dashboard...</p>
       </div>
     );
   }
 
-  if (
-    !session &&
-    Boolean(authPage)
-  ) {
+  if (!session && Boolean(authPage)) {
     return (
       <>
         <div className="auth-page">
           <div className="auth-left">
             <div className="auth-brand">
-              <div className="auth-logo">
-                CA
-              </div>
+              <div className="auth-logo">CA</div>
 
-              <span>
-                PROGRESS
-              </span>
+              <span>PROGRESS</span>
             </div>
 
             <div className="auth-hero">
-              <div className="auth-badge">
-                ALL CA LEVELS
-              </div>
+              <div className="auth-badge">ALL CA LEVELS</div>
 
               <h1>
                 Your preparation.
                 <br />
-
-                <span>
-                  Clearly tracked.
-                </span>
+                <span>Clearly tracked.</span>
               </h1>
 
               <p>
-                Track chapters,
-                revisions, tests
-                and your preparation
-                progress in one focused
-                workspace.
+                Track chapters, revisions, tests and your preparation progress
+                in one focused workspace.
               </p>
 
               <div className="auth-features">
                 <AuthFeature
-                  icon={
-                    <BookOpen
-                      size={18}
-                    />
-                  }
+                  icon={<BookOpen size={18} />}
                   title="Track every chapter"
                   text="Stay organised across all subjects."
                 />
 
                 <AuthFeature
-                  icon={
-                    <LineChart
-                      size={18}
-                    />
-                  }
+                  icon={<LineChart size={18} />}
                   title="See your progress"
                   text="Know exactly how far you have come."
                 />
 
                 <AuthFeature
-                  icon={
-                    <Target
-                      size={18}
-                    />
-                  }
+                  icon={<Target size={18} />}
                   title="Stay consistent"
                   text="Build momentum every day."
                 />
               </div>
             </div>
 
-            <div className="auth-footer">
-              Built for focused CA
-              preparation.
-            </div>
+            <div className="auth-footer">Built for focused CA preparation.</div>
           </div>
 
           <div className="auth-right">
             <div className="auth-card">
               <div className="auth-card-head">
-                <div className="auth-mobile-logo">
-                  CA
-                </div>
+                <div className="auth-mobile-logo">CA</div>
 
                 <h2>Welcome to CA Progress</h2>
 
                 <p>
-                  Sign in or create an account securely with Google or your phone number.
+                  Sign in or create an account securely with Google or your
+                  phone number.
                 </p>
               </div>
 
@@ -739,24 +664,16 @@ export default function Tracker({
                 <span>or use your phone number</span>
               </div>
 
-              <form
-                onSubmit={handleAuth}
-                className="auth-form"
-              >
+              <form onSubmit={handleAuth} className="auth-form">
                 <label>
                   Mobile number
-
                   <input
                     type="tel"
                     inputMode="tel"
                     autoComplete="tel"
                     placeholder="+91 98765 43210"
                     value={phone}
-                    onChange={(event) =>
-                      setPhone(
-                        event.target.value
-                      )
-                    }
+                    onChange={(event) => setPhone(event.target.value)}
                     disabled={phoneOtpSent}
                     required
                   />
@@ -765,7 +682,6 @@ export default function Tracker({
                 {phoneOtpSent && (
                   <label>
                     Verification code
-
                     <input
                       type="text"
                       inputMode="numeric"
@@ -774,10 +690,7 @@ export default function Tracker({
                       value={phoneOtp}
                       onChange={(event) =>
                         setPhoneOtp(
-                          event.target.value.replace(
-                            /\D/g,
-                            ""
-                          ).slice(0, 6)
+                          event.target.value.replace(/\D/g, "").slice(0, 6),
                         )
                       }
                       minLength={6}
@@ -793,33 +706,21 @@ export default function Tracker({
                     type="checkbox"
                     checked={rememberOnDevice}
                     onChange={(event) =>
-                      setRememberOnDevice(
-                        event.target.checked
-                      )
+                      setRememberOnDevice(event.target.checked)
                     }
                   />
 
                   <span>
-                    <strong>
-                      Remember on this device
-                    </strong>
+                    <strong>Remember on this device</strong>
 
-                    <small>
-                      Stay signed in after closing your browser.
-                    </small>
+                    <small>Stay signed in after closing your browser.</small>
                   </span>
                 </label>
 
-                {authError && (
-                  <div className="auth-error">
-                    {authError}
-                  </div>
-                )}
+                {authError && <div className="auth-error">{authError}</div>}
 
                 {authMessage && (
-                  <div className="auth-success">
-                    {authMessage}
-                  </div>
+                  <div className="auth-success">{authMessage}</div>
                 )}
 
                 <button
@@ -830,8 +731,8 @@ export default function Tracker({
                   {submitting
                     ? "Please wait..."
                     : phoneOtpSent
-                    ? "Verify and continue"
-                    : "Send verification code"}
+                      ? "Verify and continue"
+                      : "Send verification code"}
                 </button>
 
                 {phoneOtpSent && (
@@ -859,25 +760,20 @@ export default function Tracker({
 
                   continueAsGuest();
 
-                  router.push(
-                    "/dashboard"
-                  );
+                  router.push("/dashboard");
                 }}
               >
                 Continue without an account
               </button>
 
               <p className="auth-guest-note">
-                Browse subjects and chapters
-                freely. Sign in only when you
-                want to track and save your
-                progress.
+                Browse subjects and chapters freely. Sign in only when you want
+                to track and save your progress.
               </p>
 
               {!configured && (
                 <div className="auth-config-warning">
-                  Supabase environment
-                  variables are missing.
+                  Supabase environment variables are missing.
                 </div>
               )}
             </div>
@@ -897,31 +793,18 @@ export default function Tracker({
     <>
       <TrackerDashboard
         initialView={initialView}
-        email={
-          session?.user.email ||
-          session?.user.phone ||
-          ""
-        }
-        userId={
-          session?.user.id || null
-        }
+        email={session?.user.email || session?.user.phone || ""}
+        userId={session?.user.id || null}
         onLogout={handleLogout}
-        onRequireAuth={() =>
-          setShowLoginPrompt(true)
-        }
+        onRequireAuth={() => setShowLoginPrompt(true)}
       />
 
       {showLoginPrompt && (
         <div
           className="login-prompt-backdrop"
           role="presentation"
-          onMouseDown={(
-            event
-          ) => {
-            if (
-              event.target ===
-              event.currentTarget
-            ) {
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
               setShowLoginPrompt(false);
             }
           }}
@@ -934,9 +817,7 @@ export default function Tracker({
           >
             <button
               className="login-prompt-close"
-              onClick={() =>
-                setShowLoginPrompt(false)
-              }
+              onClick={() => setShowLoginPrompt(false)}
               aria-label="Close login prompt"
             >
               ×
@@ -946,15 +827,11 @@ export default function Tracker({
               <LogIn size={24} />
             </div>
 
-            <h2 id="login-prompt-title">
-              Login required
-            </h2>
+            <h2 id="login-prompt-title">Login required</h2>
 
             <p>
-              Please sign in or create an
-              account to use this feature
-              and securely sync your
-              progress.
+              Please sign in or create an account to use this feature and
+              securely sync your progress.
             </p>
 
             <div className="login-prompt-actions">
@@ -983,16 +860,53 @@ export default function Tracker({
 
             <button
               className="login-prompt-later"
-              onClick={() =>
-                setShowLoginPrompt(false)
-              }
+              onClick={() => setShowLoginPrompt(false)}
             >
               Not now
             </button>
           </section>
         </div>
       )}
-      {showLogoutPrompt&&<div className="login-prompt-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)setShowLogoutPrompt(false)}}><section className="login-prompt logout-confirm" role="dialog" aria-modal="true" aria-labelledby="logout-confirm-title"><div className="login-prompt-icon"><LogOut size={24}/></div><h2 id="logout-confirm-title">Would you like to logout?</h2><p>Your saved progress will remain securely connected to your account.</p><div className="login-prompt-actions"><button className="logout-confirm-button" onClick={()=>void confirmLogout()}>Logout</button><button className="login-prompt-secondary" onClick={()=>setShowLogoutPrompt(false)}>Cancel</button></div></section></div>}
+      {showLogoutPrompt && (
+        <div
+          className="login-prompt-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget)
+              setShowLogoutPrompt(false);
+          }}
+        >
+          <section
+            className="login-prompt logout-confirm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="logout-confirm-title"
+          >
+            <div className="login-prompt-icon">
+              <LogOut size={24} />
+            </div>
+            <h2 id="logout-confirm-title">Would you like to logout?</h2>
+            <p>
+              Your saved progress will remain securely connected to your
+              account.
+            </p>
+            <div className="login-prompt-actions">
+              <button
+                className="logout-confirm-button"
+                onClick={() => void confirmLogout()}
+              >
+                Logout
+              </button>
+              <button
+                className="login-prompt-secondary"
+                onClick={() => setShowLogoutPrompt(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </>
   );
 }
@@ -1012,18 +926,12 @@ function AuthFeature({
 }) {
   return (
     <div className="auth-feature">
-      <div className="auth-feature-icon">
-        {icon}
-      </div>
+      <div className="auth-feature-icon">{icon}</div>
 
       <div>
-        <strong>
-          {title}
-        </strong>
+        <strong>{title}</strong>
 
-        <span>
-          {text}
-        </span>
+        <span>{text}</span>
       </div>
     </div>
   );
@@ -1071,271 +979,208 @@ function TrackerDashboard({
     isAdmin,
     sectionRules,
     pageElements,
-    saveProgress:
-      saveStoredProgress,
+    examAttempts: managedAttempts,
+    saveProgress: saveStoredProgress,
   } = useProgress();
 
-  const [
-    courseLevel,
-    setCourseLevel,
-  ] = useState<CourseLevel>(() => {
+  const [courseLevel, setCourseLevel] = useState<CourseLevel>(() => {
     if (typeof window === "undefined") {
       return "Intermediate";
     }
 
     const saved = window.localStorage.getItem(
-      "ca-progress-course-level"
+      "ca-progress-course-level",
     ) as CourseLevel | null;
 
-    return saved &&
-      ["Foundation", "Intermediate", "Final"].includes(saved)
+    return saved && ["Foundation", "Intermediate", "Final"].includes(saved)
       ? saved
       : "Intermediate";
   });
 
-  const [
-    courseGroup,
-    setCourseGroup,
-  ] = useState<CourseGroup>(() => {
+  const [courseGroup, setCourseGroup] = useState<CourseGroup>(() => {
     if (typeof window === "undefined") {
       return "Both";
     }
 
     const saved = window.localStorage.getItem(
-      "ca-progress-course-group"
+      "ca-progress-course-group",
     ) as CourseGroup | null;
 
-    return saved &&
-      ["Group 1", "Group 2", "Both"].includes(saved)
+    return saved && ["Group 1", "Group 2", "Both"].includes(saved)
       ? saved
       : "Both";
   });
-  const [attemptId,setAttemptId]=useState(()=>typeof window==="undefined"?"inter-sep-2026":window.localStorage.getItem("ca-progress-attempt-id")||"inter-sep-2026");
-  const [customAttemptDate,setCustomAttemptDate]=useState(()=>typeof window==="undefined"?"":window.localStorage.getItem("ca-progress-custom-attempt-date")||"");
-  const selectedAttempt=useMemo(()=>{
-    const preset=examAttempts[courseLevel].find(item=>item.id===attemptId);
-    if(preset)return preset;
-    if(attemptId==="custom"&&customAttemptDate)return {id:"custom",label:"Custom attempt",date:`${customAttemptDate}T14:00:00+05:30`};
+  const [attemptId, setAttemptId] = useState(() =>
+    typeof window === "undefined"
+      ? "inter-sep-2026"
+      : window.localStorage.getItem("ca-progress-attempt-id") ||
+        "inter-sep-2026",
+  );
+  const [customAttemptDate, setCustomAttemptDate] = useState(() =>
+    typeof window === "undefined"
+      ? ""
+      : window.localStorage.getItem("ca-progress-custom-attempt-date") || "",
+  );
+  const examAttempts = useMemo<Record<CourseLevel, ExamAttempt[]>>(() => {
+    const mapped = { Foundation: [], Intermediate: [], Final: [] } as Record<
+      CourseLevel,
+      ExamAttempt[]
+    >;
+    (managedAttempts as AppExamAttempt[]).forEach((item) =>
+      mapped[item.course_level].push({
+        id: item.attempt_key,
+        label: item.label,
+        date: item.exam_date,
+      }),
+    );
+    (Object.keys(mapped) as CourseLevel[]).forEach((level) => {
+      if (!mapped[level].length) mapped[level] = fallbackExamAttempts[level];
+    });
+    return mapped;
+  }, [managedAttempts]);
+  const selectedAttempt = useMemo(() => {
+    const preset = examAttempts[courseLevel].find(
+      (item) => item.id === attemptId,
+    );
+    if (preset) return preset;
+    if (attemptId === "custom" && customAttemptDate)
+      return {
+        id: "custom",
+        label: "Custom attempt",
+        date: `${customAttemptDate}T14:00:00+05:30`,
+      };
     return examAttempts[courseLevel][0];
-  },[attemptId,courseLevel,customAttemptDate]);
+  }, [attemptId, courseLevel, customAttemptDate, examAttempts]);
 
-  useEffect(()=>{
-    if(attemptId!=="custom"&&!examAttempts[courseLevel].some(item=>item.id===attemptId)){
-      const next=examAttempts[courseLevel][0].id;setAttemptId(next);window.localStorage.setItem("ca-progress-attempt-id",next);
+  useEffect(() => {
+    if (
+      attemptId !== "custom" &&
+      !examAttempts[courseLevel].some((item) => item.id === attemptId)
+    ) {
+      const next = examAttempts[courseLevel][0].id;
+      setAttemptId(next);
+      window.localStorage.setItem("ca-progress-attempt-id", next);
     }
-  },[attemptId,courseLevel]);
+  }, [attemptId, courseLevel, examAttempts]);
 
   const [onboardingLevel, setOnboardingLevel] =
     useState<CourseLevel>(courseLevel);
   const [onboardingGroup, setOnboardingGroup] =
     useState<CourseGroup>(courseGroup);
-  const [showCourseOnboarding, setShowCourseOnboarding] =
-    useState(false);
+  const [showCourseOnboarding, setShowCourseOnboarding] = useState(false);
 
   useEffect(() => {
     if (
-      !window.localStorage.getItem(
-        "ca-progress-course-onboarding-complete"
-      )
+      !window.localStorage.getItem("ca-progress-course-onboarding-complete")
     ) {
       setShowCourseOnboarding(true);
     }
   }, []);
 
   const subjects = useMemo(
-    () =>
-      getSubjectsForSelection(
-        courseLevel,
-        courseGroup
-      ),
-    [courseGroup, courseLevel]
+    () => getSubjectsForSelection(courseLevel, courseGroup),
+    [courseGroup, courseLevel],
   );
 
   const allRows = useMemo(
     () =>
-      subjects.flatMap(
-        (subject) =>
-          syllabus[subject].map(
-            (chapter) => ({
-              subject,
-              chapter,
-              key: keyFor(
-                subject,
-                chapter
-              ),
-            })
-          )
+      subjects.flatMap((subject) =>
+        syllabus[subject].map((chapter) => ({
+          subject,
+          chapter,
+          key: keyFor(subject, chapter),
+        })),
       ),
-    [subjects]
+    [subjects],
   );
 
-  const [
-    view,
-    setView,
-  ] = useState<View>(() => {
-    if (
-      !userId &&
-      !publicViews.includes(
-        initialView
-      )
-    ) {
+  const [view, setView] = useState<View>(() => {
+    if (!userId && !publicViews.includes(initialView)) {
       return "Dashboard";
     }
 
-    if (
-      initialView !==
-      "Dashboard"
-    ) {
+    if (initialView !== "Dashboard") {
       return initialView;
     }
 
-    if (
-      typeof window ===
-      "undefined"
-    ) {
+    if (typeof window === "undefined") {
       return initialView;
     }
 
-    const savedView =
-      window.localStorage.getItem(
-        "ca-progress-view"
-      ) as View | null;
+    const savedView = window.localStorage.getItem(
+      "ca-progress-view",
+    ) as View | null;
 
-    return menu.some(
-      (item) =>
-        item.label === savedView
-    ) &&
-      (
-        Boolean(userId) ||
-        publicViews.includes(
-          savedView as View
-        )
-      )
+    return menu.some((item) => item.label === savedView) &&
+      (Boolean(userId) || publicViews.includes(savedView as View))
       ? savedView!
       : initialView;
   });
 
   useEffect(() => {
-    if (
-      !userId &&
-      !publicViews.includes(
-        view
-      )
-    ) {
+    if (!userId && !publicViews.includes(view)) {
       setView("Dashboard");
 
-      router.replace(
-        viewRoutes.Dashboard
-      );
+      router.replace(viewRoutes.Dashboard);
     }
-  }, [
-    router,
-    userId,
-    view,
-  ]);
+  }, [router, userId, view]);
 
   useEffect(() => {
-    if (
-      userId ||
-      publicViews.includes(
-        initialView
-      )
-    ) {
+    if (userId || publicViews.includes(initialView)) {
       setView(initialView);
     }
-  }, [
-    initialView,
-    userId,
-  ]);
+  }, [initialView, userId]);
 
-  const [
-    activeSubject,
-    setActiveSubject,
-  ] = useState<SubjectName>(() => {
-    if (
-      typeof window ===
-      "undefined"
-    ) {
+  const [activeSubject, setActiveSubject] = useState<SubjectName>(() => {
+    if (typeof window === "undefined") {
       return subjects[0];
     }
 
-    const saved =
-      window.localStorage.getItem(
-        "ca-progress-subject"
-      ) as SubjectName | null;
+    const saved = window.localStorage.getItem(
+      "ca-progress-subject",
+    ) as SubjectName | null;
 
-    return (
-      saved &&
-      subjects.includes(saved)
-    )
-      ? saved
-      : subjects[0];
+    return saved && subjects.includes(saved) ? saved : subjects[0];
   });
 
-  const [
-    search,
-    setSearch,
-  ] = useState("");
+  const [search, setSearch] = useState("");
 
   const applyCourseSelection = (
     nextLevel: CourseLevel,
-    nextGroup: CourseGroup
+    nextGroup: CourseGroup,
   ) => {
-    const resolvedGroup =
-      nextLevel === "Foundation"
-        ? "Both"
-        : nextGroup;
+    const resolvedGroup = nextLevel === "Foundation" ? "Both" : nextGroup;
 
-    const nextSubjects =
-      getSubjectsForSelection(
-        nextLevel,
-        resolvedGroup
-      );
+    const nextSubjects = getSubjectsForSelection(nextLevel, resolvedGroup);
 
     setCourseLevel(nextLevel);
     setCourseGroup(resolvedGroup);
     setActiveSubject(nextSubjects[0]);
     setSearch("");
 
-    window.localStorage.setItem(
-      "ca-progress-course-level",
-      nextLevel
-    );
+    window.localStorage.setItem("ca-progress-course-level", nextLevel);
 
-    window.localStorage.setItem(
-      "ca-progress-course-group",
-      resolvedGroup
-    );
+    window.localStorage.setItem("ca-progress-course-group", resolvedGroup);
 
-    window.localStorage.setItem(
-      "ca-progress-subject",
-      nextSubjects[0]
-    );
+    window.localStorage.setItem("ca-progress-subject", nextSubjects[0]);
   };
 
-  const [
-    sidebarOpen,
-    setSidebarOpen,
-  ] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const [
-    toast,
-    setToast,
-  ] = useState("");
+  const [toast, setToast] = useState("");
 
   const [upgradeFeature, setUpgradeFeature] = useState("");
 
   const ruleFor = (label: View) =>
-    sectionRules.find(
-      (rule) => rule.section_key === viewSectionKeys[label]
-    );
+    sectionRules.find((rule) => rule.section_key === viewSectionKeys[label]);
 
   const ruleIsVisible = (label: View) => {
     const rule = ruleFor(label);
     if (!rule || isAdmin) return true;
     const now = Date.now();
     if (!rule.enabled) return false;
-    if (rule.starts_at && new Date(rule.starts_at).getTime() > now) return false;
+    if (rule.starts_at && new Date(rule.starts_at).getTime() > now)
+      return false;
     if (rule.ends_at && new Date(rule.ends_at).getTime() < now) return false;
     if (rule.audience === "guest" && userId) return false;
     if (rule.audience === "member" && !userId) return false;
@@ -1344,19 +1189,17 @@ function TrackerDashboard({
 
   const visibleMenu = menu
     .filter((item) => ruleIsVisible(item.label))
-    .sort((a, b) =>
-      (ruleFor(a.label)?.sort_order ?? 999) -
-      (ruleFor(b.label)?.sort_order ?? 999)
+    .sort(
+      (a, b) =>
+        (ruleFor(a.label)?.sort_order ?? 999) -
+        (ruleFor(b.label)?.sort_order ?? 999),
     );
 
   useEffect(() => {
     if (!sectionRules.length) return;
     const rule = ruleFor(view);
     const planLocked = Boolean(
-      userId &&
-      !isAdmin &&
-      rule &&
-      planRank < rule.minimum_plan_rank
+      userId && !isAdmin && rule && planRank < rule.minimum_plan_rank,
     );
 
     if (!ruleIsVisible(view) || planLocked) {
@@ -1366,236 +1209,128 @@ function TrackerDashboard({
     }
   }, [isAdmin, planRank, router, sectionRules, userId, view]);
 
-  const firstName =
-    email
-      ? email
-          .split("@")[0]
-          .replace(
-            /^[a-z]/,
-            (letter) =>
-              letter.toUpperCase()
-          )
-      : "Student";
+  const firstName = email
+    ? email.split("@")[0].replace(/^[a-z]/, (letter) => letter.toUpperCase())
+    : "Student";
 
-  const initial =
-    firstName
-      .charAt(0)
-      .toUpperCase() || "C";
+  const initial = firstName.charAt(0).toUpperCase() || "C";
 
-  const saveProgress =
-    async () => {
-      if (!userId) {
-        onRequireAuth();
-        return;
-      }
+  const saveProgress = async () => {
+    if (!userId) {
+      onRequireAuth();
+      return;
+    }
 
-      await saveStoredProgress();
-    };
+    await saveStoredProgress();
+  };
 
   useEffect(() => {
-    window.localStorage.setItem(
-      "ca-progress-view",
-      view
-    );
+    window.localStorage.setItem("ca-progress-view", view);
   }, [view]);
 
   /* =======================================================
      STATS
   ======================================================= */
 
-  const counts =
-    useMemo(
-      () =>
-        Object.fromEntries(
-          stages.map(
-            (stage) => [
-              stage.key,
-              allRows.filter(
-                (row) =>
-                  progress[
-                    row.key
-                  ]?.[
-                    stage.key
-                  ]
-              ).length,
-            ]
-          )
-        ) as Record<
-          Stage,
-          number
-        >,
-      [
-        allRows,
-        progress,
-      ]
-    );
+  const counts = useMemo(
+    () =>
+      Object.fromEntries(
+        stages.map((stage) => [
+          stage.key,
+          allRows.filter((row) => progress[row.key]?.[stage.key]).length,
+        ]),
+      ) as Record<Stage, number>,
+    [allRows, progress],
+  );
 
-  const subjectStats = (
-    subject: SubjectName
-  ) => {
-    const chapters =
-      syllabus[subject];
+  const subjectStats = (subject: SubjectName) => {
+    const chapters = syllabus[subject];
 
-    const done =
-      chapters.filter(
-        (chapter) =>
-          progress[
-            keyFor(
-              subject,
-              chapter
-            )
-          ]?.done
-      ).length;
+    const done = chapters.filter(
+      (chapter) => progress[keyFor(subject, chapter)]?.done,
+    ).length;
 
     return {
-      total:
-        chapters.length,
+      total: chapters.length,
 
       done,
 
-      percent:
-        chapters.length
-          ? Math.round(
-              (
-                done /
-                chapters.length
-              ) *
-                100
-            )
-          : 0,
+      percent: chapters.length ? Math.round((done / chapters.length) * 100) : 0,
     };
   };
 
-  const overall =
-    allRows.length
-      ? Math.round(
-          (
-            counts.done /
-            allRows.length
-          ) *
-            100
-        )
-      : 0;
+  const overall = allRows.length
+    ? Math.round((counts.done / allRows.length) * 100)
+    : 0;
 
   /* =======================================================
      HELPERS
   ======================================================= */
 
-  const flash = (
-    message: string
-  ) => {
+  const flash = (message: string) => {
     setToast(message);
 
-    window.setTimeout(
-      () => {
-        setToast("");
-      },
-      1800
-    );
+    window.setTimeout(() => {
+      setToast("");
+    }, 1800);
   };
 
-  const toggle = (
-    subject: SubjectName,
-    chapter: string,
-    stage: Stage
-  ) => {
+  const toggle = (subject: SubjectName, chapter: string, stage: Stage) => {
     if (!userId) {
       onRequireAuth();
       return;
     }
 
-    const key =
-      keyFor(
-        subject,
-        chapter
-      );
+    const key = keyFor(subject, chapter);
 
-    const wasOn =
-      Boolean(
-        progress[key]?.[
-          stage
-        ]
-      );
+    const wasOn = Boolean(progress[key]?.[stage]);
 
-    const previousStage =
-      stagePrerequisites[
-        stage
-      ];
+    const previousStage = stagePrerequisites[stage];
 
-    if (
-      !wasOn &&
-      previousStage &&
-      !progress[key]?.[
-        previousStage
-      ]
-    ) {
+    if (!wasOn && previousStage && !progress[key]?.[previousStage]) {
       return;
     }
 
-    setProgress(
-      (current) => {
-        const nextStages = {
-          ...current[key],
-          [stage]: !wasOn,
-        };
+    setProgress((current) => {
+      const nextStages = {
+        ...current[key],
+        [stage]: !wasOn,
+      };
 
-        if (wasOn) {
-          stages.forEach(
-            (laterStage) => {
-              if (
-                stageDependsOn(
-                  laterStage.key,
-                  stage
-                )
-              ) {
-                nextStages[
-                  laterStage.key
-                ] = false;
-              }
-            }
-          );
-        }
-
-        return {
-          ...current,
-          [key]: nextStages,
-        };
+      if (wasOn) {
+        stages.forEach((laterStage) => {
+          if (stageDependsOn(laterStage.key, stage)) {
+            nextStages[laterStage.key] = false;
+          }
+        });
       }
-    );
+
+      return {
+        ...current,
+        [key]: nextStages,
+      };
+    });
 
     if (!wasOn) {
-      setActivities(
-        (current) =>
-          [
-            {
-              id:
-                `${Date.now()}-${key}-${stage}`,
-              chapter,
-              subject,
-              stage,
-              time:
-                "Just now",
-            },
-            ...current,
-          ].slice(
-            0,
-            50
-          )
+      setActivities((current) =>
+        [
+          {
+            id: `${Date.now()}-${key}-${stage}`,
+            chapter,
+            subject,
+            stage,
+            time: "Just now",
+          },
+          ...current,
+        ].slice(0, 50),
       );
     }
   };
-  const nav = (
-    label: View
-  ) => {
+  const nav = (label: View) => {
     const rule = ruleFor(label);
     if (!ruleIsVisible(label)) return;
 
-    if (
-      userId &&
-      !isAdmin &&
-      rule &&
-      planRank < rule.minimum_plan_rank
-    ) {
+    if (userId && !isAdmin && rule && planRank < rule.minimum_plan_rank) {
       setUpgradeFeature(rule.label || label);
       setSidebarOpen(false);
       return;
@@ -1610,21 +1345,19 @@ function TrackerDashboard({
     window.localStorage.setItem("ca-progress-view", label);
     router.push(viewRoutes[label]);
 
-    setSidebarOpen(
-      false
-    );
+    setSidebarOpen(false);
   };
 
   return (
     <main
       className={`app-shell layout-${String(
-        ruleFor(view)?.appearance?.layout || "standard"
+        ruleFor(view)?.appearance?.layout || "standard",
       )}`}
-      style={{
-        "--blue": String(
-          ruleFor(view)?.appearance?.accentColor || "#2d68cf"
-        ),
-      } as CSSProperties}
+      style={
+        {
+          "--blue": String(ruleFor(view)?.appearance?.accentColor || "#2d68cf"),
+        } as CSSProperties
+      }
     >
       {showCourseOnboarding && (
         <div className="course-modal-backdrop">
@@ -1639,7 +1372,10 @@ function TrackerDashboard({
 
               <div>
                 <h2 id="course-onboarding-title">Set up your dashboard</h2>
-                <p>Choose your CA level and papers. You can change this later from Settings.</p>
+                <p>
+                  Choose your CA level and papers. You can change this later
+                  from Settings.
+                </p>
               </div>
             </div>
 
@@ -1649,16 +1385,24 @@ function TrackerDashboard({
                   <button
                     type="button"
                     key={level}
-                    className={onboardingLevel === level ? "course-level-card active" : "course-level-card"}
+                    className={
+                      onboardingLevel === level
+                        ? "course-level-card active"
+                        : "course-level-card"
+                    }
                     onClick={() => {
                       setOnboardingLevel(level);
                       if (level === "Foundation") setOnboardingGroup("Both");
                     }}
                   >
                     <strong>CA {level}</strong>
-                    <span>{level === "Foundation" ? "4 papers" : "6 papers · 2 groups"}</span>
+                    <span>
+                      {level === "Foundation"
+                        ? "4 papers"
+                        : "6 papers · 2 groups"}
+                    </span>
                   </button>
-                )
+                ),
               )}
             </div>
 
@@ -1676,9 +1420,11 @@ function TrackerDashboard({
                         onClick={() => setOnboardingGroup(group)}
                       >
                         <strong>{group}</strong>
-                        <span>{group === "Both" ? "All 6 papers" : "3 papers"}</span>
+                        <span>
+                          {group === "Both" ? "All 6 papers" : "3 papers"}
+                        </span>
                       </button>
-                    )
+                    ),
                   )}
                 </div>
               </div>
@@ -1692,7 +1438,7 @@ function TrackerDashboard({
                   applyCourseSelection(onboardingLevel, onboardingGroup);
                   window.localStorage.setItem(
                     "ca-progress-course-onboarding-complete",
-                    "true"
+                    "true",
                   );
                   setShowCourseOnboarding(false);
                 }}
@@ -1704,100 +1450,57 @@ function TrackerDashboard({
         </div>
       )}
 
-      <aside
-        className={`sidebar ${
-          sidebarOpen
-            ? "open"
-            : ""
-        }`}
-      >
+      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
         <div className="brand">
-          <span>
-            CA
-          </span>
+          <span>CA</span>
 
-          <small>
-            PROGRESS
-          </small>
+          <small>PROGRESS</small>
         </div>
 
         <nav>
-          {visibleMenu.map(
-            (item) => {
-              const Icon =
-                item.icon;
+          {visibleMenu.map((item) => {
+            const Icon = item.icon;
 
-              return (
-                <button
-                  key={
-                    item.label
-                  }
-                  className={
-                    view ===
-                    item.label
-                      ? "nav-item active"
-                      : "nav-item"
-                  }
-                  onClick={() =>
-                    nav(
-                      item.label
-                    )
-                  }
-                >
-                  <Icon
-                    size={18}
-                  />
+            return (
+              <button
+                key={item.label}
+                className={view === item.label ? "nav-item active" : "nav-item"}
+                onClick={() => nav(item.label)}
+              >
+                <Icon size={18} />
 
-                  <span>
-                    {ruleFor(item.label)?.label || item.label}
-                  </span>
+                <span>{ruleFor(item.label)?.label || item.label}</span>
 
-                  {userId &&
-                    !isAdmin &&
-                    planRank < (ruleFor(item.label)?.minimum_plan_rank || 0) && (
-                      <Lock size={12} className="nav-lock" />
-                    )}
-                </button>
-              );
-            }
-          )}
+                {userId &&
+                  !isAdmin &&
+                  planRank < (ruleFor(item.label)?.minimum_plan_rank || 0) && (
+                    <Lock size={12} className="nav-lock" />
+                  )}
+              </button>
+            );
+          })}
         </nav>
 
-        <button
-          className="profile-card"
-          onClick={() => nav("Settings")}
-        >
-          <span className="avatar">
-            {initial}
-          </span>
+        <button className="profile-card" onClick={() => nav("Settings")}>
+          <span className="avatar">{initial}</span>
 
           <span>
-            <b>
-              {firstName}
-            </b>
+            <b>{firstName}</b>
 
             <small>
               CA {courseLevel}
-              {courseLevel !== "Foundation"
-                ? ` · ${courseGroup}`
-                : ""}
+              {courseLevel !== "Foundation" ? ` · ${courseGroup}` : ""}
             </small>
           </span>
 
-          <ChevronRight
-            size={15}
-          />
+          <ChevronRight size={15} />
         </button>
       </aside>
 
       {sidebarOpen && (
         <button
           className="backdrop"
-          onClick={() =>
-            setSidebarOpen(
-              false
-            )
-          }
+          onClick={() => setSidebarOpen(false)}
           aria-label="Close menu"
         />
       )}
@@ -1805,47 +1508,45 @@ function TrackerDashboard({
       {upgradeFeature && (
         <div className="login-prompt-backdrop">
           <section className="login-prompt">
-            <button className="login-prompt-close" onClick={() => setUpgradeFeature("")}>×</button>
-            <div className="login-prompt-icon"><Crown size={23} /></div>
+            <button
+              className="login-prompt-close"
+              onClick={() => setUpgradeFeature("")}
+            >
+              ×
+            </button>
+            <div className="login-prompt-icon">
+              <Crown size={23} />
+            </div>
             <h2>Upgrade required</h2>
-            <p>{upgradeFeature} is not included in your current {planSlug} plan. Contact the administrator or choose an eligible subscription.</p>
-            <button className="login-prompt-primary" onClick={() => setUpgradeFeature("")}>Okay</button>
+            <p>
+              {upgradeFeature} is not included in your current {planSlug} plan.
+              Contact the administrator or choose an eligible subscription.
+            </p>
+            <button
+              className="login-prompt-primary"
+              onClick={() => setUpgradeFeature("")}
+            >
+              Okay
+            </button>
           </section>
         </div>
       )}
 
       <section
         className={`app-content ${
-          view === "Community"
-            ? "community-content"
-            : ""
+          view === "Community" ? "community-content" : ""
         }`}
       >
         <header className="topbar">
-          <button
-            className="mobile-menu"
-            onClick={() =>
-              setSidebarOpen(
-                true
-              )
-            }
-          >
-            <Menu
-              size={22}
-            />
+          <button className="mobile-menu" onClick={() => setSidebarOpen(true)}>
+            <Menu size={22} />
           </button>
 
           <div className="hello">
-            <h1>
-              {view ===
-              "Dashboard"
-                ? `Hi, ${firstName}! 👋`
-                : view}
-            </h1>
+            <h1>{view === "Dashboard" ? `Hi, ${firstName}! 👋` : view}</h1>
 
             <p>
-              {view ===
-              "Dashboard"
+              {view === "Dashboard"
                 ? "Discipline today, success tomorrow."
                 : view === "Community"
                   ? "Connect, discuss and study together with fellow CA students."
@@ -1856,26 +1557,18 @@ function TrackerDashboard({
           <div className="top-actions">
             <button
               className="icon-button"
-              onClick={() =>
-                nav("Chapters")
-              }
+              onClick={() => nav("Chapters")}
               title="Search chapters"
             >
-              <Search
-                size={19}
-              />
+              <Search size={19} />
             </button>
 
             <button
               className="icon-button"
-              onClick={() =>
-                nav("Activity")
-              }
+              onClick={() => nav("Activity")}
               title="View activity"
             >
-              <Bell
-                size={19}
-              />
+              <Bell size={19} />
             </button>
 
             {userId ? (
@@ -1894,17 +1587,13 @@ function TrackerDashboard({
               >
                 <LogIn size={17} />
 
-                <span>
-                  Sign in
-                </span>
+                <span>Sign in</span>
               </button>
             )}
 
             <button
               className="avatar large"
-              onClick={() =>
-                nav("Settings")
-              }
+              onClick={() => nav("Settings")}
               title="Account settings"
             >
               {initial}
@@ -1912,278 +1601,187 @@ function TrackerDashboard({
           </div>
         </header>
 
-        {view ===
-          "Dashboard" && (
-          <Dashboard
-            courseLevel={courseLevel}
-            courseGroup={courseGroup}
-            subjects={
-              subjects
-            }
-            overall={
-              overall
-            }
-            counts={
-              counts
-            }
-            total={
-              allRows.length
-            }
-            subjectStats={
-              subjectStats
-            }
-            activities={
-              activities.filter(
-                (item) =>
-                  subjects.includes(
-                    item.subject as SubjectName
-                  )
-              )
-            }
-            studyHours={
-              userId
-                ? studyHours
-                : [0, 0, 0, 0, 0, 0, 0]
-            }
-            onSubjects={() =>
-              nav("Subjects")
-            }
-            onQuickStudy={() =>
-              nav("Study Sessions")
-            }
-            onQuickTest={() =>
-              nav("Test Series")
-            }
-            onQuickGoal={() =>
-              nav("Goals")
-            }
-            onQuickCalendar={() =>
-              nav("Calendar")
-            }
-            onViewAll={() =>
-              nav("Activity")
-            }
-            pageElements={pageElements}
-            signedIn={Boolean(userId)}
-            planRank={planRank}
-            isAdmin={isAdmin}
-            attempt={selectedAttempt}
-          />
-        )}
-
-        {/* COMMUNITY */}
-        {view === "Community" && (
-          userId ? (
-            <CommunityChat
-              userId={userId}
-              email={email}
+        <DynamicPageLayout
+          pageKey={viewSectionKeys[view]}
+          elements={pageElements}
+          signedIn={Boolean(userId)}
+          planRank={planRank}
+          isAdmin={isAdmin}
+        >
+          {view === "Dashboard" && (
+            <Dashboard
               courseLevel={courseLevel}
+              courseGroup={courseGroup}
               subjects={subjects}
+              overall={overall}
+              counts={counts}
+              total={allRows.length}
+              subjectStats={subjectStats}
+              activities={activities.filter((item) =>
+                subjects.includes(item.subject as SubjectName),
+              )}
+              studyHours={userId ? studyHours : [0, 0, 0, 0, 0, 0, 0]}
+              onSubjects={() => nav("Subjects")}
+              onQuickStudy={() => nav("Study Sessions")}
+              onQuickTest={() => nav("Test Series")}
+              onQuickGoal={() => nav("Goals")}
+              onQuickCalendar={() => nav("Calendar")}
+              onViewAll={() => nav("Activity")}
+              pageElements={pageElements}
+              signedIn={Boolean(userId)}
+              planRank={planRank}
+              isAdmin={isAdmin}
+              attempt={selectedAttempt}
             />
-          ) : null
-        )}
+          )}
 
-        {view ===
-          "Subjects" && (
-          <SubjectsView
-            subjects={
-              subjects
-            }
-            subjectStats={
-              subjectStats
-            }
-            onOpen={(
-              subject
-            ) => {
-              setActiveSubject(
-                subject
-              );
+          {/* COMMUNITY */}
+          {view === "Community" &&
+            (userId ? (
+              <CommunityChat
+                userId={userId}
+                email={email}
+                courseLevel={courseLevel}
+                subjects={subjects}
+              />
+            ) : null)}
 
-              window.localStorage.setItem(
-                "ca-progress-subject",
-                subject
-              );
+          {view === "Subjects" && (
+            <SubjectsView
+              subjects={subjects}
+              subjectStats={subjectStats}
+              onOpen={(subject) => {
+                setActiveSubject(subject);
 
-              nav("Chapters");
-            }}
-          />
-        )}
+                window.localStorage.setItem("ca-progress-subject", subject);
 
-        {view ===
-          "Chapters" && (
-          <ChaptersView
-            subjects={
-              subjects
-            }
-            activeSubject={
-              activeSubject
-            }
-            setActiveSubject={
-              setActiveSubject
-            }
-            search={
-              search
-            }
-            setSearch={
-              setSearch
-            }
-            progress={
-              progress
-            }
-            toggle={
-              toggle
-            }
-            subjectStats={
-              subjectStats
-            }
-            onSaveProgress={
-              saveProgress
-            }
-            saveStatus={
-              saveStatus
-            }
-            onBack={() =>
-              nav("Subjects")
-            }
-          />
-        )}
+                nav("Chapters");
+              }}
+            />
+          )}
 
-        {view ===
-          "Analytics" && (
-          <AnalyticsView
-            overall={
-              overall
-            }
-            counts={
-              counts
-            }
-            total={
-              allRows.length
-            }
-            subjects={
-              subjects
-            }
-            subjectStats={
-              subjectStats
-            }
-            studyHours={
-              studyHours
-            }
-          />
-        )}
+          {view === "Chapters" && (
+            <ChaptersView
+              subjects={subjects}
+              activeSubject={activeSubject}
+              setActiveSubject={setActiveSubject}
+              search={search}
+              setSearch={setSearch}
+              progress={progress}
+              toggle={toggle}
+              subjectStats={subjectStats}
+              onSaveProgress={saveProgress}
+              saveStatus={saveStatus}
+              onBack={() => nav("Subjects")}
+            />
+          )}
 
-        {view ===
-          "Activity" && (
-          <ActivityView
-            activities={
-              activities.filter(
-                (item) =>
-                  subjects.includes(
-                    item.subject as SubjectName
-                  )
-              )
-            }
-          />
-        )}
+          {view === "Analytics" && (
+            <AnalyticsView
+              overall={overall}
+              counts={counts}
+              total={allRows.length}
+              subjects={subjects}
+              subjectStats={subjectStats}
+              studyHours={studyHours}
+            />
+          )}
 
-        {view === "Study Sessions" && (
-          <StudySessionsView
-            subjects={subjects}
-            items={studySessions.filter(
-              (item) =>
-                subjects.includes(item.subject)
-            )}
-            setItems={setStudySessions}
-            onAddMinutes={(minutes) =>
-              setStudyHours((hours) => [
-                ...hours.slice(0, 6),
-                Number(
-                  (
-                    hours[6] +
-                    minutes / 60
-                  ).toFixed(1)
-                ),
-              ])
-            }
-            onDeleteMinutes={(minutes) =>
-              setStudyHours((hours) => [
-                ...hours.slice(0, 6),
-                Math.max(
-                  0,
-                  Number(
-                    (
-                      hours[6] -
-                      minutes / 60
-                    ).toFixed(1)
-                  )
-                ),
-              ])
-            }
-            onSave={saveProgress}
-            saveStatus={saveStatus}
-          />
-        )}
+          {view === "Activity" && (
+            <ActivityView
+              activities={activities.filter((item) =>
+                subjects.includes(item.subject as SubjectName),
+              )}
+            />
+          )}
 
-        {view === "Goals" && (
-          <GoalsView
-            items={goals}
-            setItems={setGoals}
-            onSave={saveProgress}
-            saveStatus={saveStatus}
-          />
-        )}
+          {view === "Study Sessions" && (
+            <StudySessionsView
+              subjects={subjects}
+              items={studySessions.filter((item) =>
+                subjects.includes(item.subject),
+              )}
+              setItems={setStudySessions}
+              onAddMinutes={(minutes) =>
+                setStudyHours((hours) => [
+                  ...hours.slice(0, 6),
+                  Number((hours[6] + minutes / 60).toFixed(1)),
+                ])
+              }
+              onDeleteMinutes={(minutes) =>
+                setStudyHours((hours) => [
+                  ...hours.slice(0, 6),
+                  Math.max(0, Number((hours[6] - minutes / 60).toFixed(1))),
+                ])
+              }
+              onSave={saveProgress}
+              saveStatus={saveStatus}
+            />
+          )}
 
-        {view === "Test Series" && (
-          <TestsView
-            subjects={subjects}
-            items={tests.filter(
-              (item) =>
-                subjects.includes(item.subject)
-            )}
-            setItems={setTests}
-            onSave={saveProgress}
-            saveStatus={saveStatus}
-          />
-        )}
+          {view === "Goals" && (
+            <GoalsView
+              items={goals}
+              setItems={setGoals}
+              onSave={saveProgress}
+              saveStatus={saveStatus}
+            />
+          )}
 
-        {view === "Calendar" && (
-          <CalendarView
-            items={calendarItems}
-            setItems={setCalendarItems}
-            onSave={saveProgress}
-            saveStatus={saveStatus}
-          />
-        )}
+          {view === "Test Series" && (
+            <TestsView
+              subjects={subjects}
+              items={tests.filter((item) => subjects.includes(item.subject))}
+              setItems={setTests}
+              onSave={saveProgress}
+              saveStatus={saveStatus}
+            />
+          )}
 
-        {view === "Notes" && (
-          <NotesView
-            items={notes}
-            setItems={setNotes}
-            onSave={saveProgress}
-            saveStatus={saveStatus}
-          />
-        )}
+          {view === "Calendar" && (
+            <CalendarView
+              items={calendarItems}
+              setItems={setCalendarItems}
+              onSave={saveProgress}
+              saveStatus={saveStatus}
+            />
+          )}
 
-        {view ===
-          "Settings" && (
-          <SettingsView
-            email={
-              email
-            }
-            signedIn={Boolean(userId)}
-            isAdmin={isAdmin}
-            courseLevel={courseLevel}
-            courseGroup={courseGroup}
-            attemptId={attemptId}
-            customAttemptDate={customAttemptDate}
-            onAttemptChange={(id,date)=>{setAttemptId(id);setCustomAttemptDate(date);window.localStorage.setItem("ca-progress-attempt-id",id);if(date)window.localStorage.setItem("ca-progress-custom-attempt-date",date);}}
-            onCourseChange={applyCourseSelection}
-            onSignIn={onRequireAuth}
-            onLogout={
-              onLogout
-            }
-          />
-        )}
+          {view === "Notes" && (
+            <NotesView
+              items={notes}
+              setItems={setNotes}
+              onSave={saveProgress}
+              saveStatus={saveStatus}
+            />
+          )}
+
+          {view === "Settings" && (
+            <SettingsView
+              email={email}
+              signedIn={Boolean(userId)}
+              isAdmin={isAdmin}
+              courseLevel={courseLevel}
+              courseGroup={courseGroup}
+              attemptId={attemptId}
+              examAttempts={examAttempts}
+              customAttemptDate={customAttemptDate}
+              onAttemptChange={(id, date) => {
+                setAttemptId(id);
+                setCustomAttemptDate(date);
+                window.localStorage.setItem("ca-progress-attempt-id", id);
+                if (date)
+                  window.localStorage.setItem(
+                    "ca-progress-custom-attempt-date",
+                    date,
+                  );
+              }}
+              onCourseChange={applyCourseSelection}
+              onSignIn={onRequireAuth}
+              onLogout={onLogout}
+            />
+          )}
+        </DynamicPageLayout>
       </section>
     </main>
   );
@@ -2215,319 +1813,302 @@ function Dashboard({
   isAdmin,
   attempt,
 }: any) {
-  const recent =
-    activities.slice(0, 4);
-  const configured=Boolean((pageElements as AppPageElement[]|undefined)?.some(item=>item.page_key==="dashboard"));
-  const element=(key:string)=>((pageElements||[]) as AppPageElement[]).find(item=>item.page_key==="dashboard"&&item.element_key===key);
-  const visible=(key:string)=>{const item=element(key);if(!configured||!item)return true;if(isAdmin)return true;if(!item.enabled)return false;if(item.audience==="guest"&&signedIn)return false;if(item.audience==="member"&&!signedIn)return false;if(signedIn&&planRank<item.minimum_plan_rank)return false;return true};
-  const title=(key:string,fallback:string)=>element(key)?.label||fallback;
-  const elementStyle=(key:string):CSSProperties=>{const item=element(key);return {order:item?.sort_order,background:String(item?.appearance?.backgroundColor||"" )||undefined,color:String(item?.appearance?.textColor||"")||undefined,borderRadius:item?.appearance?.borderRadius?`${Number(item.appearance.borderRadius)}px`:undefined}};
-  const quickActions=((pageElements||[]) as AppPageElement[]).filter(item=>item.page_key==="dashboard"&&item.element_type==="quick_action"&&(!configured||visible(item.element_key))).sort((a,b)=>a.sort_order-b.sort_order);
-  const actionMap:Record<string,()=>void>={"quick-study":onQuickStudy,"quick-test":onQuickTest,"quick-goal":onQuickGoal,"quick-calendar":onQuickCalendar};
-  const [countdownNow,setCountdownNow]=useState(Date.now());
-  useEffect(()=>{const timer=window.setInterval(()=>setCountdownNow(Date.now()),60*60*1000);return()=>window.clearInterval(timer)},[]);
-  const remaining=Math.max(0,new Date((attempt as ExamAttempt).date).getTime()-countdownNow);
-  const remainingDays=Math.floor(remaining/86400000);
-  const remainingHours=Math.floor((remaining%86400000)/3600000);
+  const recent = activities.slice(0, 4);
+  const configured = Boolean(
+    (pageElements as AppPageElement[] | undefined)?.some(
+      (item) => item.page_key === "dashboard",
+    ),
+  );
+  const element = (key: string) =>
+    ((pageElements || []) as AppPageElement[]).find(
+      (item) => item.page_key === "dashboard" && item.element_key === key,
+    );
+  const visible = (key: string) => {
+    const item = element(key);
+    if (!configured || !item) return true;
+    if (isAdmin) return true;
+    if (!item.enabled) return false;
+    if (item.audience === "guest" && signedIn) return false;
+    if (item.audience === "member" && !signedIn) return false;
+    if (signedIn && planRank < item.minimum_plan_rank) return false;
+    return true;
+  };
+  const title = (key: string, fallback: string) =>
+    element(key)?.label || fallback;
+  const elementStyle = (key: string): CSSProperties => {
+    const item = element(key);
+    return {
+      order: item?.sort_order,
+      background: String(item?.appearance?.backgroundColor || "") || undefined,
+      color: String(item?.appearance?.textColor || "") || undefined,
+      borderRadius: item?.appearance?.borderRadius
+        ? `${Number(item.appearance.borderRadius)}px`
+        : undefined,
+    };
+  };
+  const quickActions = ((pageElements || []) as AppPageElement[])
+    .filter(
+      (item) =>
+        item.page_key === "dashboard" &&
+        item.element_type === "quick_action" &&
+        (!configured || visible(item.element_key)),
+    )
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const actionMap: Record<string, () => void> = {
+    "quick-study": onQuickStudy,
+    "quick-test": onQuickTest,
+    "quick-goal": onQuickGoal,
+    "quick-calendar": onQuickCalendar,
+  };
+  const [countdownNow, setCountdownNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setCountdownNow(Date.now()),
+      60 * 60 * 1000,
+    );
+    return () => window.clearInterval(timer);
+  }, []);
+  const remaining = Math.max(
+    0,
+    new Date((attempt as ExamAttempt).date).getTime() - countdownNow,
+  );
+  const remainingDays = Math.floor(remaining / 86400000);
+  const remainingHours = Math.floor((remaining % 86400000) / 3600000);
 
   return (
     <>
       <div className="dashboard-head">
-        {visible("exam-countdown")&&<div className="exam-card" style={elementStyle("exam-countdown")}>
-          <CalendarDays
-            size={28}
-          />
+        {visible("exam-countdown") && (
+          <div className="exam-card" style={elementStyle("exam-countdown")}>
+            <CalendarDays size={28} />
 
-          <div>
-            <small>
-              CA {String(courseLevel).toUpperCase()}
-              {courseLevel !== "Foundation"
-                ? ` · ${String(courseGroup).toUpperCase()}`
-                : ""}
-            </small>
-            <p className="attempt-label">{(attempt as ExamAttempt).label} attempt</p>
+            <div>
+              <small>
+                CA {String(courseLevel).toUpperCase()}
+                {courseLevel !== "Foundation"
+                  ? ` · ${String(courseGroup).toUpperCase()}`
+                  : ""}
+              </small>
+              <p className="attempt-label">
+                {(attempt as ExamAttempt).label} attempt
+              </p>
 
-            <div className="countdown">
-              <b>
-                {remainingDays}
-                <span>
-                  Days
-                </span>
-              </b>
+              <div className="countdown">
+                <b>
+                  {remainingDays}
+                  <span>Days</span>
+                </b>
 
-              <b>
-                {remainingHours}
-                <span>
-                  Hours
-                </span>
-              </b>
-
+                <b>
+                  {remainingHours}
+                  <span>Hours</span>
+                </b>
+              </div>
             </div>
           </div>
-        </div>}
+        )}
 
-        {visible("daily-streak")&&<div className="streak-card" style={elementStyle("daily-streak")}>
-          <div className="flame">
-            <Flame
-              size={31}
-            />
+        {visible("daily-streak") && (
+          <div className="streak-card" style={elementStyle("daily-streak")}>
+            <div className="flame">
+              <Flame size={31} />
+            </div>
+
+            <div>
+              <small>{title("daily-streak", "Daily Streak")}</small>
+
+              <b>
+                0 <span>days</span>
+              </b>
+
+              <p>Complete a chapter to begin</p>
+            </div>
           </div>
-
-          <div>
-            <small>
-              {title("daily-streak","Daily Streak")}
-            </small>
-
-            <b>
-              0{" "}
-              <span>
-                days
-              </span>
-            </b>
-
-            <p>
-              Complete a chapter to begin
-            </p>
-          </div>
-        </div>}
+        )}
       </div>
 
       <div className="dashboard-grid top-grid">
-        {visible("overall-progress")&&<section className="panel overall-card" style={elementStyle("overall-progress")}>
-          <h3>
-            {title("overall-progress","Overall Progress")}
-          </h3>
+        {visible("overall-progress") && (
+          <section
+            className="panel overall-card"
+            style={elementStyle("overall-progress")}
+          >
+            <h3>{title("overall-progress", "Overall Progress")}</h3>
 
-          <div className="overall-body">
-            <ProgressRing
-              value={
-                overall
-              }
-            />
+            <div className="overall-body">
+              <ProgressRing value={overall} />
 
-            <div className="metric-list">
-              <Metric
-                icon={
-                  <BookOpen
-                    size={16}
-                  />
-                }
-                label="Total Chapters"
-                value={
-                  total
-                }
-              />
+              <div className="metric-list">
+                <Metric
+                  icon={<BookOpen size={16} />}
+                  label="Total Chapters"
+                  value={total}
+                />
 
-              <Metric
-                icon={
-                  <Check
-                    size={16}
-                  />
-                }
-                label="Completed"
-                value={
-                  counts.done
-                }
-              />
+                <Metric
+                  icon={<Check size={16} />}
+                  label="Completed"
+                  value={counts.done}
+                />
 
-              <Metric
-                icon={
-                  <NotebookPen
-                    size={16}
-                  />
-                }
-                label="1st Revision"
-                value={
-                  counts.revision1
-                }
-              />
+                <Metric
+                  icon={<NotebookPen size={16} />}
+                  label="1st Revision"
+                  value={counts.revision1}
+                />
 
-              <Metric
-                icon={
-                  <NotebookPen
-                    size={16}
-                  />
-                }
-                label="2nd Revision"
-                value={
-                  counts.revision2
-                }
-              />
+                <Metric
+                  icon={<NotebookPen size={16} />}
+                  label="2nd Revision"
+                  value={counts.revision2}
+                />
 
-              <Metric
-                icon={
-                  <ClipboardCheck
-                    size={16}
-                  />
-                }
-                label="Test 1"
-                value={
-                  counts.testDone
-                }
-              />
+                <Metric
+                  icon={<ClipboardCheck size={16} />}
+                  label="Test 1"
+                  value={counts.testDone}
+                />
 
-              <Metric
-                icon={
-                  <ClipboardCheck
-                    size={16}
-                  />
-                }
-                label="Test 2"
-                value={
-                  counts.test2Done
-                }
-              />
+                <Metric
+                  icon={<ClipboardCheck size={16} />}
+                  label="Test 2"
+                  value={counts.test2Done}
+                />
+              </div>
             </div>
-          </div>
-        </section>}
+          </section>
+        )}
 
-        {visible("activity-progress")&&<section className="panel activity-progress" style={elementStyle("activity-progress")}>
-          <h3>
-            {title("activity-progress","Progress by Activity")}
-          </h3>
+        {visible("activity-progress") && (
+          <section
+            className="panel activity-progress"
+            style={elementStyle("activity-progress")}
+          >
+            <h3>{title("activity-progress", "Progress by Activity")}</h3>
 
-          {stages.map(
-            (stage) => (
+            {stages.map((stage) => (
               <ProgressLine
-                key={
-                  stage.key
-                }
-                label={
-                  stage.label
-                }
+                key={stage.key}
+                label={stage.label}
                 value={
-                  total
-                    ? Math.round(
-                        (
-                          counts[
-                            stage.key
-                          ] /
-                          total
-                        ) *
-                          100
-                      )
-                    : 0
+                  total ? Math.round((counts[stage.key] / total) * 100) : 0
                 }
               />
-            )
-          )}
-        </section>}
+            ))}
+          </section>
+        )}
 
-        {visible("study-week")&&<section className="panel study-card" style={elementStyle("study-week")}>
-          <h3>
-            {title("study-week","Study This Week")}
-          </h3>
+        {visible("study-week") && (
+          <section
+            className="panel study-card"
+            style={elementStyle("study-week")}
+          >
+            <h3>{title("study-week", "Study This Week")}</h3>
 
-          <div className="study-total">
-            {studyHours
-              .reduce(
-                (
-                  a: number,
-                  b: number
-                ) =>
-                  a + b,
-                0
-              )
-              .toFixed(1)}
-            h
+            <div className="study-total">
+              {studyHours.reduce((a: number, b: number) => a + b, 0).toFixed(1)}
+              h<small>Total Study Time</small>
+            </div>
 
-            <small>
-              Total Study Time
-            </small>
-          </div>
-
-          <MiniLine
-            data={
-              studyHours
-            }
-          />
-        </section>}
+            <MiniLine data={studyHours} />
+          </section>
+        )}
       </div>
 
       <div className="dashboard-grid lower-grid">
-        {visible("subject-progress")&&<section className="panel subject-panel" style={elementStyle("subject-progress")}>
-          <div className="panel-heading">
-            <h3>
-              {title("subject-progress","Subject Progress")}
-            </h3>
+        {visible("subject-progress") && (
+          <section
+            className="panel subject-panel"
+            style={elementStyle("subject-progress")}
+          >
+            <div className="panel-heading">
+              <h3>{title("subject-progress", "Subject Progress")}</h3>
 
-            <button
-              onClick={
-                onSubjects
-              }
-            >
-              View All
-            </button>
-          </div>
+              <button onClick={onSubjects}>View All</button>
+            </div>
 
-          {subjects.map(
-            (
-              subject: SubjectName
-            ) => (
+            {subjects.map((subject: SubjectName) => (
               <SubjectRow
-                key={
-                  subject
-                }
-                subject={
-                  subject
-                }
-                stats={
-                  subjectStats(
-                    subject
-                  )
-                }
-                onClick={
-                  onSubjects
-                }
+                key={subject}
+                subject={subject}
+                stats={subjectStats(subject)}
+                onClick={onSubjects}
               />
-            )
-          )}
-        </section>}
+            ))}
+          </section>
+        )}
 
-        {visible("recent-activity")&&<section className="panel recent-panel" style={elementStyle("recent-activity")}>
-          <div className="panel-heading">
-            <h3>
-              {title("recent-activity","Recent Activity")}
-            </h3>
+        {visible("recent-activity") && (
+          <section
+            className="panel recent-panel"
+            style={elementStyle("recent-activity")}
+          >
+            <div className="panel-heading">
+              <h3>{title("recent-activity", "Recent Activity")}</h3>
 
-            <button
-              onClick={
-                onViewAll
-              }
-            >
-              View All
-            </button>
-          </div>
+              <button onClick={onViewAll}>View All</button>
+            </div>
 
-          {recent.length
-            ? recent.map(
-                (
-                  item: ActivityItem
-                ) => (
-                  <RecentRow
-                    key={
-                      item.id
-                    }
-                    item={
-                      item
-                    }
-                  />
-                )
-              )
-            : (
-              <div className="dashboard-empty">
-                No saved activity yet.
-              </div>
+            {recent.length ? (
+              recent.map((item: ActivityItem) => (
+                <RecentRow key={item.id} item={item} />
+              ))
+            ) : (
+              <div className="dashboard-empty">No saved activity yet.</div>
             )}
-        </section>}
+          </section>
+        )}
 
-        {visible("quick-actions")&&<section className="panel quick-panel" style={elementStyle("quick-actions")}>
-          <h3>
-            {title("quick-actions","Quick Actions")}
-          </h3>
+        {visible("quick-actions") && (
+          <section
+            className="panel quick-panel"
+            style={elementStyle("quick-actions")}
+          >
+            <h3>{title("quick-actions", "Quick Actions")}</h3>
 
-          <div className="quick-grid">{(configured?quickActions:[{element_key:"quick-study",label:"Start Study Session",config:{}},{element_key:"quick-test",label:"Take a Test",config:{}},{element_key:"quick-goal",label:"Add Goal",config:{}},{element_key:"quick-calendar",label:"View Calendar",config:{}}] as AppPageElement[]).map(action=><button key={action.element_key} onClick={actionMap[action.element_key]||(()=>{const route=String(action.config?.route||"");if(route)window.location.href=route})}><Goal/><span>{action.label}</span></button>)}</div>
-        </section>}
+            <div className="quick-grid">
+              {(configured
+                ? quickActions
+                : ([
+                    {
+                      element_key: "quick-study",
+                      label: "Start Study Session",
+                      config: {},
+                    },
+                    {
+                      element_key: "quick-test",
+                      label: "Take a Test",
+                      config: {},
+                    },
+                    {
+                      element_key: "quick-goal",
+                      label: "Add Goal",
+                      config: {},
+                    },
+                    {
+                      element_key: "quick-calendar",
+                      label: "View Calendar",
+                      config: {},
+                    },
+                  ] as AppPageElement[])
+              ).map((action) => (
+                <button
+                  key={action.element_key}
+                  onClick={
+                    actionMap[action.element_key] ||
+                    (() => {
+                      const route = String(action.config?.route || "");
+                      if (route) window.location.href = route;
+                    })
+                  }
+                >
+                  <Goal />
+                  <span>{action.label}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </>
   );
@@ -2543,63 +2124,37 @@ function SubjectsView({
   onOpen,
 }: {
   subjects: SubjectName[];
-  subjectStats: (
-    subject: SubjectName
-  ) => {
+  subjectStats: (subject: SubjectName) => {
     total: number;
     done: number;
     percent: number;
   };
-  onOpen: (
-    subject: SubjectName
-  ) => void;
+  onOpen: (subject: SubjectName) => void;
 }) {
   return (
     <section className="single-page">
       <div className="page-heading">
         <div>
-          <h2>
-            Subjects
-          </h2>
+          <h2>Subjects</h2>
 
-          <p>
-            Track your progress
-            subject-wise.
-          </p>
+          <p>Track your progress subject-wise.</p>
         </div>
 
         <button className="search-lite">
-          <Search
-            size={15}
-          />
-
+          <Search size={15} />
           Search subjects
         </button>
       </div>
 
       <div className="subject-list-full">
-        {subjects.map(
-          (subject) => (
-            <SubjectRow
-              key={
-                subject
-              }
-              subject={
-                subject
-              }
-              stats={
-                subjectStats(
-                  subject
-                )
-              }
-              onClick={() =>
-                onOpen(
-                  subject
-                )
-              }
-            />
-          )
-        )}
+        {subjects.map((subject) => (
+          <SubjectRow
+            key={subject}
+            subject={subject}
+            stats={subjectStats(subject)}
+            onClick={() => onOpen(subject)}
+          />
+        ))}
       </div>
     </section>
   );
@@ -2624,22 +2179,12 @@ function ChaptersView({
 }: {
   subjects: SubjectName[];
   activeSubject: SubjectName;
-  setActiveSubject: (
-    subject: SubjectName
-  ) => void;
+  setActiveSubject: (subject: SubjectName) => void;
   search: string;
-  setSearch: (
-    value: string
-  ) => void;
+  setSearch: (value: string) => void;
   progress: Progress;
-  toggle: (
-    subject: SubjectName,
-    chapter: string,
-    stage: Stage
-  ) => void;
-  subjectStats: (
-    subject: SubjectName
-  ) => {
+  toggle: (subject: SubjectName, chapter: string, stage: Stage) => void;
+  subjectStats: (subject: SubjectName) => {
     total: number;
     done: number;
     percent: number;
@@ -2648,119 +2193,63 @@ function ChaptersView({
   saveStatus: "idle" | "saving" | "saved" | "error";
   onBack: () => void;
 }) {
-  const rows =
-    syllabus[
-      activeSubject
-    ].filter(
-      (chapter) =>
-        chapter
-          .toLowerCase()
-          .includes(
-            search.toLowerCase()
-          )
-    );
+  const rows = syllabus[activeSubject].filter((chapter) =>
+    chapter.toLowerCase().includes(search.toLowerCase()),
+  );
 
-  const stats =
-    subjectStats(
-      activeSubject
-    );
+  const stats = subjectStats(activeSubject);
 
   return (
     <section className="chapters-page">
       <div className="chapter-top">
         <div>
-          <button
-            className="back-link"
-            onClick={onBack}
-          >
+          <button className="back-link" onClick={onBack}>
             ‹ Back to Subjects
           </button>
 
-          <h2>
-            {
-              subjectMeta[
-                activeSubject
-              ].short
-            }
-          </h2>
+          <h2>{subjectMeta[activeSubject].short}</h2>
 
           <div className="chapter-progress">
             <span
               style={{
-                width:
-                  `${stats.percent}%`,
+                width: `${stats.percent}%`,
               }}
             />
 
-            <b>
-              {stats.percent}%
-            </b>
+            <b>{stats.percent}%</b>
           </div>
         </div>
 
         <select
-          value={
-            activeSubject
-          }
+          value={activeSubject}
           onChange={(event) => {
-            const subject =
-              event.target
-                .value as SubjectName;
+            const subject = event.target.value as SubjectName;
 
-            setActiveSubject(
-              subject
-            );
+            setActiveSubject(subject);
 
-            window.localStorage.setItem(
-              "ca-progress-subject",
-              subject
-            );
+            window.localStorage.setItem("ca-progress-subject", subject);
           }}
         >
-          {subjects.map(
-            (subject) => (
-              <option
-                key={
-                  subject
-                }
-              >
-                {subject}
-              </option>
-            )
-          )}
+          {subjects.map((subject) => (
+            <option key={subject}>{subject}</option>
+          ))}
         </select>
       </div>
 
       <div className="chapter-toolbar">
         <div className="chapter-toolbar-copy">
-          <strong>
-            {rows.length} Chapters
-          </strong>
+          <strong>{rows.length} Chapters</strong>
 
-          <span>
-            Complete each stage in order,
-            then save your changes.
-          </span>
+          <span>Complete each stage in order, then save your changes.</span>
         </div>
 
         <div className="chapter-toolbar-actions">
           <label>
-            <Search
-              size={16}
-            />
+            <Search size={16} />
 
             <input
-              value={
-                search
-              }
-              onChange={(
-                event
-              ) =>
-                setSearch(
-                  event.target
-                    .value
-                )
-              }
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
               placeholder="Search chapters"
             />
           </label>
@@ -2769,21 +2258,15 @@ function ChaptersView({
             type="button"
             className={`chapter-save-button ${saveStatus}`}
             onClick={onSaveProgress}
-            disabled={
-              saveStatus ===
-              "saving"
-            }
+            disabled={saveStatus === "saving"}
           >
             <Save size={15} />
 
-            {saveStatus ===
-            "saving"
+            {saveStatus === "saving"
               ? "Saving..."
-              : saveStatus ===
-                "saved"
+              : saveStatus === "saved"
                 ? "Saved ✓"
-                : saveStatus ===
-                  "error"
+                : saveStatus === "error"
                   ? "Try Again"
                   : "Save Progress"}
           </button>
@@ -2792,122 +2275,59 @@ function ChaptersView({
 
       <div className="chapter-table">
         <div className="chapter-head">
-          <span>
-            # &nbsp; Chapter Name
-          </span>
+          <span># &nbsp; Chapter Name</span>
 
-          {stages.map(
-            (stage) => (
-              <span
-                key={
-                  stage.key
-                }
-              >
-                {stage.short}
-              </span>
-            )
-          )}
+          {stages.map((stage) => (
+            <span key={stage.key}>{stage.short}</span>
+          ))}
         </div>
 
-        {rows.map(
-          (
-            chapter,
-            index
-          ) => {
-            const key =
-              keyFor(
-                activeSubject,
-                chapter
-              );
+        {rows.map((chapter, index) => {
+          const key = keyFor(activeSubject, chapter);
 
-            return (
-              <div
-                className="chapter-row"
-                key={key}
-              >
-                <span className="chapter-name">
-                  <b>
-                    {index + 1}
-                  </b>
+          return (
+            <div className="chapter-row" key={key}>
+              <span className="chapter-name">
+                <b>{index + 1}</b>
 
-                  {chapter}
-                </span>
+                {chapter}
+              </span>
 
-                {stages.map(
-                  (stage) => {
-                    const checked =
-                      Boolean(
-                        progress[
-                          key
-                        ]?.[
-                          stage.key
-                        ]
-                      );
+              {stages.map((stage) => {
+                const checked = Boolean(progress[key]?.[stage.key]);
 
-                    const prerequisite =
-                      stagePrerequisites[
-                        stage.key
-                      ];
+                const prerequisite = stagePrerequisites[stage.key];
 
-                    const disabled =
-                      Boolean(
-                        prerequisite &&
-                          !progress[
-                            key
-                          ]?.[
-                            prerequisite
-                          ]
-                      );
+                const disabled = Boolean(
+                  prerequisite && !progress[key]?.[prerequisite],
+                );
 
-                    return (
-                      <span
-                        key={
-                          stage.key
-                        }
-                        className="stage-cell"
-                      >
-                        <button
-                          type="button"
-                          disabled={
-                            disabled
-                          }
-                          className={
-                            checked
-                              ? "stage-toggle checked"
-                              : "stage-toggle"
-                          }
-                          onClick={() =>
-                            toggle(
-                              activeSubject,
-                              chapter,
-                              stage.key
-                            )
-                          }
-                          title={
-                            disabled
-                              ? "Complete the previous stage first"
-                              : stage.label
-                          }
-                        >
-                          {checked && (
-                            <Check
-                              size={14}
-                            />
-                          )}
-                        </button>
-                      </span>
-                    );
-                  }
-                )}
-              </div>
-            );
-          }
-        )}
+                return (
+                  <span key={stage.key} className="stage-cell">
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      className={
+                        checked ? "stage-toggle checked" : "stage-toggle"
+                      }
+                      onClick={() => toggle(activeSubject, chapter, stage.key)}
+                      title={
+                        disabled
+                          ? "Complete the previous stage first"
+                          : stage.label
+                      }
+                    >
+                      {checked && <Check size={14} />}
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          );
+        })}
 
         {!rows.length && (
-          <div className="chapter-empty">
-            No chapters found.
-          </div>
+          <div className="chapter-empty">No chapters found.</div>
         )}
       </div>
     </section>
@@ -2925,67 +2345,37 @@ function AnalyticsView({
   subjectStats,
   studyHours,
 }: any) {
-  const totalHours =
-    studyHours.reduce(
-      (
-        a: number,
-        b: number
-      ) => a + b,
-      0
-    );
+  const totalHours = studyHours.reduce((a: number, b: number) => a + b, 0);
 
   return (
     <section className="analytics-page">
       <div className="page-heading">
         <div>
-          <h2>
-            Analytics
-          </h2>
+          <h2>Analytics</h2>
 
-          <p>
-            Detailed insights into
-            your preparation.
-          </p>
+          <p>Detailed insights into your preparation.</p>
         </div>
 
-        <button className="select-btn">
-          This Week⌄
-        </button>
+        <button className="select-btn">This Week⌄</button>
       </div>
 
       <div className="analytics-stats">
         <Metric
-          icon={
-            <Clock3 />
-          }
+          icon={<Clock3 />}
           label="Study Time"
-          value={`${totalHours.toFixed(
-            1
-          )}h`}
+          value={`${totalHours.toFixed(1)}h`}
         />
 
-        <Metric
-          icon={
-            <Activity />
-          }
-          label="Study Sessions"
-          value="7"
-        />
+        <Metric icon={<Activity />} label="Study Sessions" value="7" />
 
         <Metric
-          icon={
-            <Clock3 />
-          }
+          icon={<Clock3 />}
           label="Daily Average"
-          value={`${(
-            totalHours / 7
-          ).toFixed(1)}h`}
+          value={`${(totalHours / 7).toFixed(1)}h`}
         />
 
         <Metric
-          icon={
-            <Trophy />
-          }
+          icon={<Trophy />}
           label="Goal Completion"
           value={`${overall}%`}
         />
@@ -2993,104 +2383,46 @@ function AnalyticsView({
 
       <div className="analytics-grid">
         <section className="panel chart-panel">
-          <h3>
-            Study Time Trend
-          </h3>
+          <h3>Study Time Trend</h3>
 
-          <MiniLine
-            data={
-              studyHours
-            }
-            tall
-          />
+          <MiniLine data={studyHours} tall />
         </section>
 
         <section className="panel donut-panel">
-          <h3>
-            Progress by Subject
-          </h3>
+          <h3>Progress by Subject</h3>
 
           <div className="donut-content">
-            <ProgressRing
-              value={
-                overall
-              }
-            />
+            <ProgressRing value={overall} />
 
             <div>
-              {subjects.map(
-                (
-                  subject: SubjectName
-                ) => (
-                  <div
-                    className="legend-subject"
-                    key={
-                      subject
-                    }
-                  >
-                    <i
-                      style={{
-                        background:
-                          subjectMeta[
-                            subject
-                          ].color,
-                      }}
-                    />
+              {subjects.map((subject: SubjectName) => (
+                <div className="legend-subject" key={subject}>
+                  <i
+                    style={{
+                      background: subjectMeta[subject].color,
+                    }}
+                  />
 
-                    <span>
-                      {
-                        subjectMeta[
-                          subject
-                        ].short
-                      }
-                    </span>
+                  <span>{subjectMeta[subject].short}</span>
 
-                    <b>
-                      {
-                        subjectStats(
-                          subject
-                        ).percent
-                      }
-                      %
-                    </b>
-                  </div>
-                )
-              )}
+                  <b>{subjectStats(subject).percent}%</b>
+                </div>
+              ))}
             </div>
           </div>
         </section>
       </div>
 
       <section className="panel analytics-progress">
-        <h3>
-          Completion Overview
-        </h3>
+        <h3>Completion Overview</h3>
 
-        {stages.map(
-          (stage) => (
-            <ProgressLine
-              key={
-                stage.key
-              }
-              label={
-                stage.label
-              }
-              value={
-                total
-                  ? Math.round(
-                      (
-                        counts[
-                          stage.key
-                        ] /
-                        total
-                      ) *
-                        100
-                    )
-                  : 0
-              }
-            />
-          )
-        )}
+        {stages.map((stage) => (
+          <ProgressLine
+            key={stage.key}
+            label={stage.label}
+            value={total ? Math.round((counts[stage.key] / total) * 100) : 0}
+          />
+        ))}
       </section>
     </section>
   );
@@ -3100,55 +2432,27 @@ function AnalyticsView({
    ACTIVITY
 ========================================================= */
 
-function ActivityView({
-  activities,
-}: {
-  activities: ActivityItem[];
-}) {
+function ActivityView({ activities }: { activities: ActivityItem[] }) {
   return (
     <section className="single-page">
       <div className="page-heading">
         <div>
-          <h2>
-            Activity
-          </h2>
+          <h2>Activity</h2>
 
-          <p>
-            A history of your completed
-            study milestones.
-          </p>
+          <p>A history of your completed study milestones.</p>
         </div>
       </div>
 
       <section className="panel activity-full">
         {activities.length ? (
-          activities.map(
-            (item) => (
-              <RecentRow
-                key={
-                  item.id
-                }
-                item={
-                  item
-                }
-              />
-            )
-          )
+          activities.map((item) => <RecentRow key={item.id} item={item} />)
         ) : (
           <div className="empty">
-            <Activity
-              size={28}
-            />
+            <Activity size={28} />
 
-            <h3>
-              No activity yet
-            </h3>
+            <h3>No activity yet</h3>
 
-            <p>
-              Mark a chapter,
-              revision, or test
-              complete to see it here.
-            </p>
+            <p>Mark a chapter, revision, or test complete to see it here.</p>
           </div>
         )}
       </section>
@@ -3174,31 +2478,21 @@ function WorkspaceHeader({
   return (
     <div className="page-heading workspace-heading">
       <div>
-        <h2>
-          {title}
-        </h2>
+        <h2>{title}</h2>
 
-        <p>
-          {text}
-        </p>
+        <p>{text}</p>
       </div>
 
       <button
         className={`workspace-save ${saveStatus}`}
         onClick={onSave}
-        disabled={
-          saveStatus ===
-          "saving"
-        }
+        disabled={saveStatus === "saving"}
       >
-        {saveStatus ===
-        "saving"
+        {saveStatus === "saving"
           ? "Saving..."
-          : saveStatus ===
-            "saved"
+          : saveStatus === "saved"
             ? "Saved ✓"
-            : saveStatus ===
-              "error"
+            : saveStatus === "error"
               ? "Try Again"
               : "Save Changes"}
       </button>
@@ -3217,31 +2511,15 @@ function StudySessionsView({
 }: {
   subjects: SubjectName[];
   items: StudySessionItem[];
-  setItems: Dispatch<
-    SetStateAction<
-      StudySessionItem[]
-    >
-  >;
-  onAddMinutes: (
-    minutes: number
-  ) => void;
-  onDeleteMinutes: (
-    minutes: number
-  ) => void;
+  setItems: Dispatch<SetStateAction<StudySessionItem[]>>;
+  onAddMinutes: (minutes: number) => void;
+  onDeleteMinutes: (minutes: number) => void;
   onSave: () => void;
   saveStatus: SaveStatus;
 }) {
-  const [
-    subject,
-    setSubject,
-  ] = useState<SubjectName>(
-    subjects[0]
-  );
+  const [subject, setSubject] = useState<SubjectName>(subjects[0]);
 
-  const [
-    minutes,
-    setMinutes,
-  ] = useState("30");
+  const [minutes, setMinutes] = useState("30");
 
   useEffect(() => {
     if (!subjects.includes(subject)) {
@@ -3249,177 +2527,90 @@ function StudySessionsView({
     }
   }, [subject, subjects]);
 
-  const add = (
-    event: FormEvent
-  ) => {
+  const add = (event: FormEvent) => {
     event.preventDefault();
 
-    const value =
-      Number(minutes);
+    const value = Number(minutes);
 
-    if (
-      !value ||
-      value < 1
-    ) {
+    if (!value || value < 1) {
       return;
     }
 
-    setItems(
-      (current) => [
-        {
-          id:
-            crypto.randomUUID(),
-          subject,
-          minutes:
-            value,
-          date:
-            new Date()
-              .toISOString(),
-        },
-        ...current,
-      ]
-    );
+    setItems((current) => [
+      {
+        id: crypto.randomUUID(),
+        subject,
+        minutes: value,
+        date: new Date().toISOString(),
+      },
+      ...current,
+    ]);
 
-    onAddMinutes(
-      value
-    );
+    onAddMinutes(value);
 
-    setMinutes(
-      "30"
-    );
+    setMinutes("30");
   };
 
-  const total =
-    items.reduce(
-      (
-        sum,
-        item
-      ) =>
-        sum +
-        item.minutes,
-      0
-    );
+  const total = items.reduce((sum, item) => sum + item.minutes, 0);
 
   return (
     <section className="single-page workspace-page">
       <WorkspaceHeader
         title="Study Sessions"
         text="Log focused study time by subject."
-        onSave={
-          onSave
-        }
-        saveStatus={
-          saveStatus
-        }
+        onSave={onSave}
+        saveStatus={saveStatus}
       />
 
       <div className="workspace-summary">
         <b>
-          {Math.floor(
-            total / 60
-          )}
-          h{" "}
-          {total % 60}
-          m
+          {Math.floor(total / 60)}h {total % 60}m
         </b>
 
-        <span>
-          Total focused time
-        </span>
+        <span>Total focused time</span>
       </div>
 
-      <form
-        className="workspace-form panel"
-        onSubmit={add}
-      >
+      <form className="workspace-form panel" onSubmit={add}>
         <select
-          value={
-            subject
-          }
-          onChange={(
-            event
-          ) =>
-            setSubject(
-              event.target
-                .value as SubjectName
-            )
-          }
+          value={subject}
+          onChange={(event) => setSubject(event.target.value as SubjectName)}
         >
-          {subjects.map(
-            (item) => (
-              <option
-                key={
-                  item
-                }
-              >
-                {item}
-              </option>
-            )
-          )}
+          {subjects.map((item) => (
+            <option key={item}>{item}</option>
+          ))}
         </select>
 
         <input
           type="number"
           min="1"
           max="1440"
-          value={
-            minutes
-          }
-          onChange={(
-            event
-          ) =>
-            setMinutes(
-              event.target
-                .value
-            )
-          }
+          value={minutes}
+          onChange={(event) => setMinutes(event.target.value)}
           placeholder="Minutes"
           required
         />
 
-        <button
-          type="submit"
-        >
-          <Plus
-            size={16}
-          />
-
+        <button type="submit">
+          <Plus size={16} />
           Add Session
         </button>
       </form>
 
-      <WorkspaceList
-        empty="No study sessions logged yet."
-      >
-        {items.map(
-          (item) => (
-            <WorkspaceRow
-              key={
-                item.id
-              }
-              title={
-                item.subject
-              }
-              meta={`${item.minutes} minutes • ${new Date(
-                item.date
-              ).toLocaleDateString()}`}
-              onDelete={() => {
-                setItems(
-                  (all) =>
-                    all.filter(
-                      (entry) =>
-                        entry.id !==
-                        item.id
-                    )
-                );
+      <WorkspaceList empty="No study sessions logged yet.">
+        {items.map((item) => (
+          <WorkspaceRow
+            key={item.id}
+            title={item.subject}
+            meta={`${item.minutes} minutes • ${new Date(
+              item.date,
+            ).toLocaleDateString()}`}
+            onDelete={() => {
+              setItems((all) => all.filter((entry) => entry.id !== item.id));
 
-                onDeleteMinutes(
-                  item.minutes
-                );
-              }}
-            />
-          )
-        )}
+              onDeleteMinutes(item.minutes);
+            }}
+          />
+        ))}
       </WorkspaceList>
     </section>
   );
@@ -3432,49 +2623,30 @@ function GoalsView({
   saveStatus,
 }: {
   items: GoalItem[];
-  setItems: Dispatch<
-    SetStateAction<
-      GoalItem[]
-    >
-  >;
+  setItems: Dispatch<SetStateAction<GoalItem[]>>;
   onSave: () => void;
   saveStatus: SaveStatus;
 }) {
-  const [
-    title,
-    setTitle,
-  ] = useState("");
+  const [title, setTitle] = useState("");
 
-  const [
-    dueDate,
-    setDueDate,
-  ] = useState("");
+  const [dueDate, setDueDate] = useState("");
 
-  const add = (
-    event: FormEvent
-  ) => {
+  const add = (event: FormEvent) => {
     event.preventDefault();
 
-    if (
-      !title.trim()
-    ) {
+    if (!title.trim()) {
       return;
     }
 
-    setItems(
-      (all) => [
-        {
-          id:
-            crypto.randomUUID(),
-          title:
-            title.trim(),
-          dueDate,
-          completed:
-            false,
-        },
-        ...all,
-      ]
-    );
+    setItems((all) => [
+      {
+        id: crypto.randomUUID(),
+        title: title.trim(),
+        dueDate,
+        completed: false,
+      },
+      ...all,
+    ]);
 
     setTitle("");
     setDueDate("");
@@ -3485,137 +2657,76 @@ function GoalsView({
       <WorkspaceHeader
         title="Goals"
         text="Set clear preparation targets and mark them complete."
-        onSave={
-          onSave
-        }
-        saveStatus={
-          saveStatus
-        }
+        onSave={onSave}
+        saveStatus={saveStatus}
       />
 
-      <form
-        className="workspace-form panel"
-        onSubmit={add}
-      >
+      <form className="workspace-form panel" onSubmit={add}>
         <input
-          value={
-            title
-          }
-          onChange={(
-            event
-          ) =>
-            setTitle(
-              event.target
-                .value
-            )
-          }
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
           placeholder="Goal title"
           required
         />
 
         <input
           type="date"
-          value={
-            dueDate
-          }
-          onChange={(
-            event
-          ) =>
-            setDueDate(
-              event.target
-                .value
-            )
-          }
+          value={dueDate}
+          onChange={(event) => setDueDate(event.target.value)}
         />
 
-        <button
-          type="submit"
-        >
-          <Plus
-            size={16}
-          />
-
+        <button type="submit">
+          <Plus size={16} />
           Add Goal
         </button>
       </form>
 
-      <WorkspaceList
-        empty="No goals added yet."
-      >
-        {items.map(
-          (item) => (
-            <div
-              className={`workspace-row ${
-                item.completed
-                  ? "complete"
-                  : ""
-              }`}
-              key={
-                item.id
+      <WorkspaceList empty="No goals added yet.">
+        {items.map((item) => (
+          <div
+            className={`workspace-row ${item.completed ? "complete" : ""}`}
+            key={item.id}
+          >
+            <button
+              className="workspace-check"
+              onClick={() =>
+                setItems((all) =>
+                  all.map((goal) =>
+                    goal.id === item.id
+                      ? {
+                          ...goal,
+                          completed: !goal.completed,
+                        }
+                      : goal,
+                  ),
+                )
               }
             >
-              <button
-                className="workspace-check"
-                onClick={() =>
-                  setItems(
-                    (all) =>
-                      all.map(
-                        (
-                          goal
-                        ) =>
-                          goal.id ===
-                          item.id
-                            ? {
-                                ...goal,
-                                completed:
-                                  !goal.completed,
-                              }
-                            : goal
-                      )
-                  )
-                }
-              >
-                {item.completed ? (
-                  <Check
-                    size={14}
-                  />
-                ) : null}
-              </button>
+              {item.completed ? <Check size={14} /> : null}
+            </button>
 
-              <div>
-                <b>
-                  {item.title}
-                </b>
+            <div>
+              <b>{item.title}</b>
 
-                <span>
-                  {item.dueDate
-                    ? `Due ${new Date(
-                        `${item.dueDate}T00:00:00`
-                      ).toLocaleDateString()}`
-                    : "No due date"}
-                </span>
-              </div>
-
-              <button
-                className="workspace-delete"
-                onClick={() =>
-                  setItems(
-                    (all) =>
-                      all.filter(
-                        (
-                          goal
-                        ) =>
-                          goal.id !==
-                          item.id
-                      )
-                  )
-                }
-              >
-                Delete
-              </button>
+              <span>
+                {item.dueDate
+                  ? `Due ${new Date(
+                      `${item.dueDate}T00:00:00`,
+                    ).toLocaleDateString()}`
+                  : "No due date"}
+              </span>
             </div>
-          )
-        )}
+
+            <button
+              className="workspace-delete"
+              onClick={() =>
+                setItems((all) => all.filter((goal) => goal.id !== item.id))
+              }
+            >
+              Delete
+            </button>
+          </div>
+        ))}
       </WorkspaceList>
     </section>
   );
@@ -3630,30 +2741,15 @@ function TestsView({
 }: {
   subjects: SubjectName[];
   items: TestItem[];
-  setItems: Dispatch<
-    SetStateAction<
-      TestItem[]
-    >
-  >;
+  setItems: Dispatch<SetStateAction<TestItem[]>>;
   onSave: () => void;
   saveStatus: SaveStatus;
 }) {
-  const [
-    subject,
-    setSubject,
-  ] = useState<SubjectName>(
-    subjects[0]
-  );
+  const [subject, setSubject] = useState<SubjectName>(subjects[0]);
 
-  const [
-    score,
-    setScore,
-  ] = useState("");
+  const [score, setScore] = useState("");
 
-  const [
-    maxScore,
-    setMaxScore,
-  ] = useState("100");
+  const [maxScore, setMaxScore] = useState("100");
 
   useEffect(() => {
     if (!subjects.includes(subject)) {
@@ -3661,42 +2757,27 @@ function TestsView({
     }
   }, [subject, subjects]);
 
-  const add = (
-    event: FormEvent
-  ) => {
+  const add = (event: FormEvent) => {
     event.preventDefault();
 
-    const scored =
-      Number(score);
+    const scored = Number(score);
 
-    const maximum =
-      Number(maxScore);
+    const maximum = Number(maxScore);
 
-    if (
-      scored < 0 ||
-      maximum < 1 ||
-      scored > maximum
-    ) {
+    if (scored < 0 || maximum < 1 || scored > maximum) {
       return;
     }
 
-    setItems(
-      (all) => [
-        {
-          id:
-            crypto.randomUUID(),
-          subject,
-          score:
-            scored,
-          maxScore:
-            maximum,
-          date:
-            new Date()
-              .toISOString(),
-        },
-        ...all,
-      ]
-    );
+    setItems((all) => [
+      {
+        id: crypto.randomUUID(),
+        subject,
+        score: scored,
+        maxScore: maximum,
+        date: new Date().toISOString(),
+      },
+      ...all,
+    ]);
 
     setScore("");
   };
@@ -3706,58 +2787,25 @@ function TestsView({
       <WorkspaceHeader
         title="Test Series"
         text="Record mock-test scores and monitor improvement."
-        onSave={
-          onSave
-        }
-        saveStatus={
-          saveStatus
-        }
+        onSave={onSave}
+        saveStatus={saveStatus}
       />
 
-      <form
-        className="workspace-form panel"
-        onSubmit={add}
-      >
+      <form className="workspace-form panel" onSubmit={add}>
         <select
-          value={
-            subject
-          }
-          onChange={(
-            event
-          ) =>
-            setSubject(
-              event.target
-                .value as SubjectName
-            )
-          }
+          value={subject}
+          onChange={(event) => setSubject(event.target.value as SubjectName)}
         >
-          {subjects.map(
-            (item) => (
-              <option
-                key={
-                  item
-                }
-              >
-                {item}
-              </option>
-            )
-          )}
+          {subjects.map((item) => (
+            <option key={item}>{item}</option>
+          ))}
         </select>
 
         <input
           type="number"
           min="0"
-          value={
-            score
-          }
-          onChange={(
-            event
-          ) =>
-            setScore(
-              event.target
-                .value
-            )
-          }
+          value={score}
+          onChange={(event) => setScore(event.target.value)}
           placeholder="Score"
           required
         />
@@ -3765,66 +2813,31 @@ function TestsView({
         <input
           type="number"
           min="1"
-          value={
-            maxScore
-          }
-          onChange={(
-            event
-          ) =>
-            setMaxScore(
-              event.target
-                .value
-            )
-          }
+          value={maxScore}
+          onChange={(event) => setMaxScore(event.target.value)}
           placeholder="Out of"
           required
         />
 
-        <button
-          type="submit"
-        >
-          <Plus
-            size={16}
-          />
-
+        <button type="submit">
+          <Plus size={16} />
           Add Result
         </button>
       </form>
 
-      <WorkspaceList
-        empty="No test results recorded yet."
-      >
-        {items.map(
-          (item) => (
-            <WorkspaceRow
-              key={
-                item.id
-              }
-              title={
-                item.subject
-              }
-              meta={`${item.score}/${item.maxScore} • ${Math.round(
-                (
-                  item.score /
-                  item.maxScore
-                ) *
-                  100
-              )}% • ${new Date(
-                item.date
-              ).toLocaleDateString()}`}
-              onDelete={() =>
-                setItems(
-                  (all) =>
-                    all.filter(
-                      (entry) =>
-                        entry.id !==
-                        item.id
-                    )
-                )
-              }
-            />
-          )
-        )}
+      <WorkspaceList empty="No test results recorded yet.">
+        {items.map((item) => (
+          <WorkspaceRow
+            key={item.id}
+            title={item.subject}
+            meta={`${item.score}/${item.maxScore} • ${Math.round(
+              (item.score / item.maxScore) * 100,
+            )}% • ${new Date(item.date).toLocaleDateString()}`}
+            onDelete={() =>
+              setItems((all) => all.filter((entry) => entry.id !== item.id))
+            }
+          />
+        ))}
       </WorkspaceList>
     </section>
   );
@@ -3837,53 +2850,30 @@ function CalendarView({
   saveStatus,
 }: {
   items: CalendarItem[];
-  setItems: Dispatch<
-    SetStateAction<
-      CalendarItem[]
-    >
-  >;
+  setItems: Dispatch<SetStateAction<CalendarItem[]>>;
   onSave: () => void;
   saveStatus: SaveStatus;
 }) {
-  const [
-    title,
-    setTitle,
-  ] = useState("");
+  const [title, setTitle] = useState("");
 
-  const [
-    date,
-    setDate,
-  ] = useState("");
+  const [date, setDate] = useState("");
 
-  const add = (
-    event: FormEvent
-  ) => {
+  const add = (event: FormEvent) => {
     event.preventDefault();
 
-    if (
-      !title.trim() ||
-      !date
-    ) {
+    if (!title.trim() || !date) {
       return;
     }
 
-    setItems(
-      (all) =>
-        [
-          ...all,
-          {
-            id:
-              crypto.randomUUID(),
-            title:
-              title.trim(),
-            date,
-          },
-        ].sort(
-          (a, b) =>
-            a.date.localeCompare(
-              b.date
-            )
-        )
+    setItems((all) =>
+      [
+        ...all,
+        {
+          id: crypto.randomUUID(),
+          title: title.trim(),
+          date,
+        },
+      ].sort((a, b) => a.date.localeCompare(b.date)),
     );
 
     setTitle("");
@@ -3895,101 +2885,49 @@ function CalendarView({
       <WorkspaceHeader
         title="Calendar"
         text="Schedule tests, revision days and study deadlines."
-        onSave={
-          onSave
-        }
-        saveStatus={
-          saveStatus
-        }
+        onSave={onSave}
+        saveStatus={saveStatus}
       />
 
-      <form
-        className="workspace-form panel"
-        onSubmit={add}
-      >
+      <form className="workspace-form panel" onSubmit={add}>
         <input
-          value={
-            title
-          }
-          onChange={(
-            event
-          ) =>
-            setTitle(
-              event.target
-                .value
-            )
-          }
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
           placeholder="Event title"
           required
         />
 
         <input
           type="date"
-          value={
-            date
-          }
-          onChange={(
-            event
-          ) =>
-            setDate(
-              event.target
-                .value
-            )
-          }
+          value={date}
+          onChange={(event) => setDate(event.target.value)}
           required
         />
 
-        <button
-          type="submit"
-        >
-          <Plus
-            size={16}
-          />
-
+        <button type="submit">
+          <Plus size={16} />
           Add Event
         </button>
       </form>
 
-      <WorkspaceList
-        empty="No calendar events yet."
-      >
-        {items.map(
-          (item) => (
-            <WorkspaceRow
-              key={
-                item.id
-              }
-              title={
-                item.title
-              }
-              meta={
-                new Date(
-                  `${item.date}T00:00:00`
-                ).toLocaleDateString(
-                  undefined,
-                  {
-                    day:
-                      "numeric",
-                    month:
-                      "long",
-                    year:
-                      "numeric",
-                  }
-                )
-              }
-              onDelete={() =>
-                setItems(
-                  (all) =>
-                    all.filter(
-                      (entry) =>
-                        entry.id !==
-                        item.id
-                    )
-                )
-              }
-            />
-          )
-        )}
+      <WorkspaceList empty="No calendar events yet.">
+        {items.map((item) => (
+          <WorkspaceRow
+            key={item.id}
+            title={item.title}
+            meta={new Date(`${item.date}T00:00:00`).toLocaleDateString(
+              undefined,
+              {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              },
+            )}
+            onDelete={() =>
+              setItems((all) => all.filter((entry) => entry.id !== item.id))
+            }
+          />
+        ))}
       </WorkspaceList>
     </section>
   );
@@ -4002,52 +2940,30 @@ function NotesView({
   saveStatus,
 }: {
   items: NoteItem[];
-  setItems: Dispatch<
-    SetStateAction<
-      NoteItem[]
-    >
-  >;
+  setItems: Dispatch<SetStateAction<NoteItem[]>>;
   onSave: () => void;
   saveStatus: SaveStatus;
 }) {
-  const [
-    title,
-    setTitle,
-  ] = useState("");
+  const [title, setTitle] = useState("");
 
-  const [
-    body,
-    setBody,
-  ] = useState("");
+  const [body, setBody] = useState("");
 
-  const add = (
-    event: FormEvent
-  ) => {
+  const add = (event: FormEvent) => {
     event.preventDefault();
 
-    if (
-      !title.trim() ||
-      !body.trim()
-    ) {
+    if (!title.trim() || !body.trim()) {
       return;
     }
 
-    setItems(
-      (all) => [
-        {
-          id:
-            crypto.randomUUID(),
-          title:
-            title.trim(),
-          body:
-            body.trim(),
-          updatedAt:
-            new Date()
-              .toISOString(),
-        },
-        ...all,
-      ]
-    );
+    setItems((all) => [
+      {
+        id: crypto.randomUUID(),
+        title: title.trim(),
+        body: body.trim(),
+        updatedAt: new Date().toISOString(),
+      },
+      ...all,
+    ]);
 
     setTitle("");
     setBody("");
@@ -4058,110 +2974,56 @@ function NotesView({
       <WorkspaceHeader
         title="Notes"
         text="Keep concise preparation notes synced to your account."
-        onSave={
-          onSave
-        }
-        saveStatus={
-          saveStatus
-        }
+        onSave={onSave}
+        saveStatus={saveStatus}
       />
 
-      <form
-        className="workspace-form notes-form panel"
-        onSubmit={add}
-      >
+      <form className="workspace-form notes-form panel" onSubmit={add}>
         <input
-          value={
-            title
-          }
-          onChange={(
-            event
-          ) =>
-            setTitle(
-              event.target
-                .value
-            )
-          }
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
           placeholder="Note title"
           required
         />
 
         <textarea
-          value={
-            body
-          }
-          onChange={(
-            event
-          ) =>
-            setBody(
-              event.target
-                .value
-            )
-          }
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
           placeholder="Write your note..."
           required
         />
 
-        <button
-          type="submit"
-        >
-          <Plus
-            size={16}
-          />
-
+        <button type="submit">
+          <Plus size={16} />
           Add Note
         </button>
       </form>
 
       <div className="notes-grid">
         {items.length ? (
-          items.map(
-            (item) => (
-              <article
-                className="note-card panel"
-                key={
-                  item.id
-                }
-              >
-                <h3>
-                  {item.title}
-                </h3>
+          items.map((item) => (
+            <article className="note-card panel" key={item.id}>
+              <h3>{item.title}</h3>
 
-                <p>
-                  {item.body}
-                </p>
+              <p>{item.body}</p>
 
-                <footer>
-                  <span>
-                    {new Date(
-                      item.updatedAt
-                    ).toLocaleDateString()}
-                  </span>
+              <footer>
+                <span>{new Date(item.updatedAt).toLocaleDateString()}</span>
 
-                  <button
-                    onClick={() =>
-                      setItems(
-                        (all) =>
-                          all.filter(
-                            (
-                              entry
-                            ) =>
-                              entry.id !==
-                              item.id
-                          )
-                      )
-                    }
-                  >
-                    Delete
-                  </button>
-                </footer>
-              </article>
-            )
-          )
+                <button
+                  onClick={() =>
+                    setItems((all) =>
+                      all.filter((entry) => entry.id !== item.id),
+                    )
+                  }
+                >
+                  Delete
+                </button>
+              </footer>
+            </article>
+          ))
         ) : (
-          <div className="workspace-empty panel">
-            No notes created yet.
-          </div>
+          <div className="workspace-empty panel">No notes created yet.</div>
         )}
       </div>
     </section>
@@ -4175,24 +3037,13 @@ function WorkspaceList({
   children: ReactNode;
   empty: string;
 }) {
-  const hasItems =
-    Array.isArray(
-      children
-    )
-      ? children.length > 0
-      : Boolean(
-          children
-        );
+  const hasItems = Array.isArray(children)
+    ? children.length > 0
+    : Boolean(children);
 
   return (
     <section className="workspace-list panel">
-      {hasItems ? (
-        children
-      ) : (
-        <div className="workspace-empty">
-          {empty}
-        </div>
-      )}
+      {hasItems ? children : <div className="workspace-empty">{empty}</div>}
     </section>
   );
 }
@@ -4209,19 +3060,12 @@ function WorkspaceRow({
   return (
     <div className="workspace-row">
       <div>
-        <b>
-          {title}
-        </b>
+        <b>{title}</b>
 
-        <span>
-          {meta}
-        </span>
+        <span>{meta}</span>
       </div>
 
-      <button
-        className="workspace-delete"
-        onClick={onDelete}
-      >
+      <button className="workspace-delete" onClick={onDelete}>
         Delete
       </button>
     </div>
@@ -4239,6 +3083,7 @@ function SettingsView({
   courseLevel,
   courseGroup,
   attemptId,
+  examAttempts,
   customAttemptDate,
   onAttemptChange,
   onCourseChange,
@@ -4250,39 +3095,34 @@ function SettingsView({
   isAdmin: boolean;
   courseLevel: CourseLevel;
   courseGroup: CourseGroup;
-  attemptId:string;
-  customAttemptDate:string;
-  onAttemptChange:(id:string,date:string)=>void;
-  onCourseChange: (
-    level: CourseLevel,
-    group: CourseGroup
-  ) => void;
+  attemptId: string;
+  examAttempts: Record<CourseLevel, ExamAttempt[]>;
+  customAttemptDate: string;
+  onAttemptChange: (id: string, date: string) => void;
+  onCourseChange: (level: CourseLevel, group: CourseGroup) => void;
   onSignIn: () => void;
   onLogout: () => void;
 }) {
-  const [selectedLevel, setSelectedLevel] =
-    useState<CourseLevel>(courseLevel);
-  const [selectedGroup, setSelectedGroup] =
-    useState<CourseGroup>(courseGroup);
+  const [selectedLevel, setSelectedLevel] = useState<CourseLevel>(courseLevel);
+  const [selectedGroup, setSelectedGroup] = useState<CourseGroup>(courseGroup);
   const [saved, setSaved] = useState(false);
-  const [selectedAttemptId,setSelectedAttemptId]=useState(attemptId);
-  const [selectedCustomDate,setSelectedCustomDate]=useState(customAttemptDate);
+  const [selectedAttemptId, setSelectedAttemptId] = useState(attemptId);
+  const [selectedCustomDate, setSelectedCustomDate] =
+    useState(customAttemptDate);
 
   useEffect(() => {
     setSelectedLevel(courseLevel);
     setSelectedGroup(courseGroup);
     setSelectedAttemptId(attemptId);
     setSelectedCustomDate(customAttemptDate);
-  }, [attemptId,courseGroup, courseLevel,customAttemptDate]);
+  }, [attemptId, courseGroup, courseLevel, customAttemptDate]);
 
   const saveCourse = () => {
     onCourseChange(
       selectedLevel,
-      selectedLevel === "Foundation"
-        ? "Both"
-        : selectedGroup
+      selectedLevel === "Foundation" ? "Both" : selectedGroup,
     );
-    onAttemptChange(selectedAttemptId,selectedCustomDate);
+    onAttemptChange(selectedAttemptId, selectedCustomDate);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1800);
   };
@@ -4293,13 +3133,9 @@ function SettingsView({
     <section className="single-page settings-page">
       <div className="page-heading">
         <div>
-          <h2>
-            Settings
-          </h2>
+          <h2>Settings</h2>
 
-          <p>
-            Manage your course, account and data preferences.
-          </p>
+          <p>Manage your course, account and data preferences.</p>
         </div>
       </div>
 
@@ -4307,10 +3143,25 @@ function SettingsView({
         {isAdmin && (
           <section className="panel settings-section settings-admin-link">
             <div className="settings-section-head">
-              <span className="settings-section-icon"><Shield size={18} /></span>
-              <div><h3>Administration</h3><p>Manage sections, plans, members, administrators and community messages.</p></div>
+              <span className="settings-section-icon">
+                <Shield size={18} />
+              </span>
+              <div>
+                <h3>Administration</h3>
+                <p>
+                  Manage sections, plans, members, administrators and community
+                  messages.
+                </p>
+              </div>
             </div>
-            <button type="button" onClick={() => { window.location.href = "/admin"; }}>Open admin panel</button>
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = "/admin";
+              }}
+            >
+              Open admin panel
+            </button>
           </section>
         )}
         <section className="panel settings-section course-settings">
@@ -4321,7 +3172,9 @@ function SettingsView({
 
             <div>
               <h3>Course preferences</h3>
-              <p>Choose the syllabus and papers shown throughout your dashboard.</p>
+              <p>
+                Choose the syllabus and papers shown throughout your dashboard.
+              </p>
             </div>
           </div>
 
@@ -4337,7 +3190,13 @@ function SettingsView({
                     if (level === "Foundation") {
                       setSelectedGroup("Both");
                     }
-                    if(selectedAttemptId!=="custom"&&!examAttempts[level].some(item=>item.id===selectedAttemptId))setSelectedAttemptId(examAttempts[level][0].id);
+                    if (
+                      selectedAttemptId !== "custom" &&
+                      !examAttempts[level].some(
+                        (item) => item.id === selectedAttemptId,
+                      )
+                    )
+                      setSelectedAttemptId(examAttempts[level][0].id);
                     setSaved(false);
                   }}
                 >
@@ -4348,7 +3207,7 @@ function SettingsView({
                       : "6 papers · 2 groups"}
                   </span>
                 </button>
-              )
+              ),
             )}
           </div>
 
@@ -4369,9 +3228,11 @@ function SettingsView({
                       }}
                     >
                       <strong>{group}</strong>
-                      <span>{group === "Both" ? "All 6 papers" : "3 papers"}</span>
+                      <span>
+                        {group === "Both" ? "All 6 papers" : "3 papers"}
+                      </span>
                     </button>
-                  )
+                  ),
                 )}
               </div>
             </div>
@@ -4379,11 +3240,48 @@ function SettingsView({
 
           <div className="settings-group-block">
             <label>Exam attempt</label>
-            <select value={selectedAttemptId} onChange={event=>{setSelectedAttemptId(event.target.value);setSaved(false)}} style={{width:"100%",height:44,border:"1px solid #dce3ec",borderRadius:10,padding:"0 12px",background:"#fff"}}>
-              {examAttempts[selectedLevel].map(attempt=><option value={attempt.id} key={attempt.id}>{attempt.label}</option>)}
+            <select
+              value={selectedAttemptId}
+              onChange={(event) => {
+                setSelectedAttemptId(event.target.value);
+                setSaved(false);
+              }}
+              style={{
+                width: "100%",
+                height: 44,
+                border: "1px solid #dce3ec",
+                borderRadius: 10,
+                padding: "0 12px",
+                background: "#fff",
+              }}
+            >
+              {examAttempts[selectedLevel].map((attempt) => (
+                <option value={attempt.id} key={attempt.id}>
+                  {attempt.label}
+                </option>
+              ))}
               <option value="custom">Custom exam date</option>
             </select>
-            {selectedAttemptId==="custom"&&<input type="date" value={selectedCustomDate} min={new Date().toISOString().slice(0,10)} onChange={event=>{setSelectedCustomDate(event.target.value);setSaved(false)}} style={{width:"100%",height:44,border:"1px solid #dce3ec",borderRadius:10,padding:"0 12px",background:"#fff",marginTop:8}}/>}
+            {selectedAttemptId === "custom" && (
+              <input
+                type="date"
+                value={selectedCustomDate}
+                min={new Date().toISOString().slice(0, 10)}
+                onChange={(event) => {
+                  setSelectedCustomDate(event.target.value);
+                  setSaved(false);
+                }}
+                style={{
+                  width: "100%",
+                  height: 44,
+                  border: "1px solid #dce3ec",
+                  borderRadius: 10,
+                  padding: "0 12px",
+                  background: "#fff",
+                  marginTop: 8,
+                }}
+              />
+            )}
           </div>
 
           <div className="settings-save-row">
@@ -4392,7 +3290,11 @@ function SettingsView({
               {courseLevel !== "Foundation" ? ` · ${courseGroup}` : ""}
             </span>
 
-            <button type="button" onClick={saveCourse} className={saved ? "saved" : ""}>
+            <button
+              type="button"
+              onClick={saveCourse}
+              className={saved ? "saved" : ""}
+            >
               <Save size={15} />
               {saved ? "Preferences saved" : "Save preferences"}
             </button>
@@ -4436,10 +3338,23 @@ function SettingsView({
 
         <section className="panel settings-section settings-membership">
           <div className="settings-section-head">
-            <span className="settings-section-icon"><Crown size={18} /></span>
-            <div><h3>Membership and plans</h3><p>Compare available subscriptions and unlock eligible premium features.</p></div>
+            <span className="settings-section-icon">
+              <Crown size={18} />
+            </span>
+            <div>
+              <h3>Membership and plans</h3>
+              <p>
+                Compare available subscriptions and unlock eligible premium
+                features.
+              </p>
+            </div>
           </div>
-          <button type="button" onClick={() => { window.location.href = "/pricing"; }}>
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = "/pricing";
+            }}
+          >
             View subscription plans
           </button>
         </section>
@@ -4452,7 +3367,9 @@ function SettingsView({
 
             <div>
               <h3>Data and device</h3>
-              <p>Understand where your preferences and study progress are stored.</p>
+              <p>
+                Understand where your preferences and study progress are stored.
+              </p>
             </div>
           </div>
 
@@ -4464,12 +3381,20 @@ function SettingsView({
 
             <div>
               <strong>Study progress</strong>
-              <span>{signedIn ? "Synced securely to your account" : "Not saved while browsing as guest"}</span>
+              <span>
+                {signedIn
+                  ? "Synced securely to your account"
+                  : "Not saved while browsing as guest"}
+              </span>
             </div>
 
             <div>
               <strong>Community</strong>
-              <span>{signedIn ? "Available for your selected course" : "Sign in required"}</span>
+              <span>
+                {signedIn
+                  ? "Available for your selected course"
+                  : "Sign in required"}
+              </span>
             </div>
           </div>
         </section>
@@ -4495,117 +3420,65 @@ function SubjectRow({
   };
   onClick: () => void;
 }) {
-  const meta =
-    subjectMeta[
-      subject
-    ];
+  const meta = subjectMeta[subject];
 
   return (
-    <button
-      className="subject-row-new"
-      onClick={
-        onClick
-      }
-    >
+    <button className="subject-row-new" onClick={onClick}>
       <span
         className="subject-badge"
         style={{
-          background:
-            meta.color,
+          background: meta.color,
         }}
       >
         {meta.code}
       </span>
 
-      <span className="subject-name">
-        {meta.short}
-      </span>
+      <span className="subject-name">{meta.short}</span>
 
       <span className="subject-bar">
         <i
           style={{
-            width:
-              `${stats.percent}%`,
+            width: `${stats.percent}%`,
           }}
         />
       </span>
 
-      <b>
-        {stats.percent}%
-      </b>
+      <b>{stats.percent}%</b>
 
       <small>
-        {stats.done}/
-        {stats.total}
+        {stats.done}/{stats.total}
       </small>
 
-      <ChevronRight
-        size={17}
-      />
+      <ChevronRight size={17} />
     </button>
   );
 }
 
-function RecentRow({
-  item,
-}: {
-  item: ActivityItem;
-}) {
-  const meta =
-    subjectMeta[
-      item.subject as SubjectName
-    ];
+function RecentRow({ item }: { item: ActivityItem }) {
+  const meta = subjectMeta[item.subject as SubjectName];
 
-  const stage =
-    stages.find(
-      (
-        itemStage
-      ) =>
-        itemStage.key ===
-        item.stage
-    );
+  const stage = stages.find((itemStage) => itemStage.key === item.stage);
 
   return (
     <div className="recent-row">
       <span
         className="subject-badge"
         style={{
-          background:
-            meta?.color ||
-            "#5b6fd6",
+          background: meta?.color || "#5b6fd6",
         }}
       >
-        {meta?.code ||
-          "CA"}
+        {meta?.code || "CA"}
       </span>
 
       <span className="recent-copy">
-        <b>
-          {item.chapter}
-        </b>
+        <b>{item.chapter}</b>
 
-        <small>
-          {
-            stageCopy[
-              item.stage
-            ]
-          }
-        </small>
+        <small>{stageCopy[item.stage]}</small>
       </span>
 
-      <span
-        className={`activity-status ${
-          item.stage
-        }`}
-      >
-        {
-          stage?.short
-        }
-      </span>
+      <span className={`activity-status ${item.stage}`}>{stage?.short}</span>
 
-      <time>
-        {item.time}
-      </time>
+      <time>{item.time}</time>
     </div>
   );
 }
@@ -4621,155 +3494,78 @@ function Metric({
 }) {
   return (
     <div className="metric">
-      <i>
-        {icon}
-      </i>
+      <i>{icon}</i>
 
-      <span>
-        {label}
-      </span>
+      <span>{label}</span>
 
-      <b>
-        {value}
-      </b>
+      <b>{value}</b>
     </div>
   );
 }
 
-function ProgressLine({
-  label,
-  value,
-}: {
-  label: string;
-  value: number;
-}) {
+function ProgressLine({ label, value }: { label: string; value: number }) {
   return (
     <div className="progress-line">
-      <span>
-        {label}
-      </span>
+      <span>{label}</span>
 
       <div>
         <i
           style={{
-            width:
-              `${value}%`,
+            width: `${value}%`,
           }}
         />
       </div>
 
-      <b>
-        {value}%
-      </b>
+      <b>{value}%</b>
     </div>
   );
 }
 
-function ProgressRing({
-  value,
-}: {
-  value: number;
-}) {
+function ProgressRing({ value }: { value: number }) {
   return (
     <div
       className="progress-ring"
       style={{
-        background:
-          `conic-gradient(
+        background: `conic-gradient(
             #2d68cf ${value}%,
             #e9edf3 0
           )`,
       }}
     >
       <div>
-        <b>
-          {value}%
-        </b>
+        <b>{value}%</b>
 
-        <span>
-          Completed
-        </span>
+        <span>Completed</span>
       </div>
     </div>
   );
 }
 
-function MiniLine({
-  data,
-  tall = false,
-}: {
-  data: number[];
-  tall?: boolean;
-}) {
-  const max =
-    Math.max(
-      ...data,
-      1
-    );
+function MiniLine({ data, tall = false }: { data: number[]; tall?: boolean }) {
+  const max = Math.max(...data, 1);
 
-  const points =
-    data
-      .map(
-        (
-          value,
-          index
-        ) =>
-          `${index *
-            (100 /
-              (data.length -
-                1))},${
-            100 -
-            (value /
-              max) *
-              75 -
-            5
-          }`
-      )
-      .join(" ");
+  const points = data
+    .map(
+      (value, index) =>
+        `${index * (100 / (data.length - 1))},${100 - (value / max) * 75 - 5}`,
+    )
+    .join(" ");
 
   return (
-    <div
-      className={`mini-line ${
-        tall
-          ? "tall"
-          : ""
-      }`}
-    >
-      <svg
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
-      >
+    <div className={`mini-line ${tall ? "tall" : ""}`}>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none">
         <defs>
-          <linearGradient
-            id="fill"
-            x1="0"
-            y1="0"
-            x2="0"
-            y2="1"
-          >
-            <stop
-              offset="0%"
-              stopColor="#2d68cf"
-              stopOpacity=".18"
-            />
+          <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#2d68cf" stopOpacity=".18" />
 
-            <stop
-              offset="100%"
-              stopColor="#2d68cf"
-              stopOpacity="0"
-            />
+            <stop offset="100%" stopColor="#2d68cf" stopOpacity="0" />
           </linearGradient>
         </defs>
 
-        <polygon
-          points={`0,100 ${points} 100,100`}
-          fill="url(#fill)"
-        />
+        <polygon points={`0,100 ${points} 100,100`} fill="url(#fill)" />
 
         <polyline
-          points={
-            points
-          }
+          points={points}
           fill="none"
           stroke="#2d68cf"
           strokeWidth="2"
@@ -4778,25 +3574,9 @@ function MiniLine({
       </svg>
 
       <div className="days">
-        {[
-          "Mon",
-          "Tue",
-          "Wed",
-          "Thu",
-          "Fri",
-          "Sat",
-          "Sun",
-        ].map(
-          (day) => (
-            <span
-              key={
-                day
-              }
-            >
-              {day}
-            </span>
-          )
-        )}
+        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+          <span key={day}>{day}</span>
+        ))}
       </div>
     </div>
   );
