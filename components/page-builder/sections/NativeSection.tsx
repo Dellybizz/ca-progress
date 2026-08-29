@@ -41,3 +41,53 @@ export const nativeReferenceDefinition: SectionDefinition = {
   ],
   Component: NativeSection,
 };
+
+const pickDesign = (...keys: string[]) =>
+  designFields.filter((field) => keys.includes(field.key));
+
+export const nativePresetDefinitions: Record<string, SectionDefinition> = {
+  heading: {
+    ...nativeReferenceDefinition,
+    name: "Page heading",
+    fields: [
+      ...contentFields,
+      ...pickDesign(
+        "backgroundColor",
+        "textColor",
+        "padding",
+        "borderRadius",
+        "alignment",
+      ),
+    ],
+  },
+  form: {
+    ...nativeReferenceDefinition,
+    name: "Form section",
+    fields: pickDesign(
+      "backgroundColor",
+      "textColor",
+      "borderColor",
+      "padding",
+      "borderRadius",
+    ),
+  },
+  container: {
+    ...nativeReferenceDefinition,
+    name: "Content section",
+    fields: pickDesign(
+      "backgroundColor",
+      "textColor",
+      "padding",
+      "borderRadius",
+      "maxWidth",
+    ),
+  },
+  card: {
+    ...nativeReferenceDefinition,
+    name: "Dashboard card",
+    fields: [
+      ...contentFields,
+      ...pickDesign("backgroundColor", "textColor", "borderRadius"),
+    ],
+  },
+};
