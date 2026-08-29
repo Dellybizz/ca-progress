@@ -70,11 +70,18 @@ export default function DynamicPageLayout({
         className="dynamic-native-section"
         style={styleFor(item)}
         key={item.id}
+        data-builder-element-key={item.element_key}
       >
         {children}
       </div>
     ) : (
-      <BuilderSection item={item} key={item.id} />
+      <div
+        key={item.id}
+        data-builder-element-key={item.element_key}
+        className="dynamic-builder-section"
+      >
+        <BuilderSection item={item} />
+      </div>
     ),
   );
 
