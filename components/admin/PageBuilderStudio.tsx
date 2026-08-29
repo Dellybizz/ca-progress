@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
   ChevronDown,
@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { AppPageElement } from "@/context/ProgressContext";
 import {
-  BuilderSection,
   definitionFor,
   sectionRegistry,
   SettingField,
@@ -53,6 +52,7 @@ export default function PageBuilderStudio() {
     [adding, setAdding] = useState<"section" | "block" | null>(null),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
+  const previewRef = useRef<HTMLIFrameElement>(null);
   const load = async () => {
     if (!supabase) return;
     const [p, e, pl, f] = await Promise.all([
@@ -81,6 +81,17 @@ export default function PageBuilderStudio() {
     ),
     roots = pageItems.filter((x) => !x.parent_key),
     selected = items.find((x) => x.id === selectedId) || null;
+  const previewRoute =
+    pages.find((page) => page.section_key === pageKey)?.route || "/dashboard";
+  const sendPreview = () =>
+    previewRef.current?.contentWindow?.postMessage(
+      { type: "ca-page-builder-preview", pageKey, elements: items },
+      window.location.origin,
+    );
+  useEffect(() => {
+    const timer = window.setTimeout(sendPreview, 80);
+    return () => window.clearTimeout(timer);
+  }, [items, pageKey]);
   useEffect(() => {
     if (!pageItems.some((x) => x.id === selectedId))
       setSelectedId(pageItems[0]?.id || "");
@@ -322,35 +333,21 @@ export default function PageBuilderStudio() {
               <i />
               <span>{pages.find((p) => p.section_key === pageKey)?.route}</span>
             </div>
-            <div className="preview-content">
-              {roots
-                .filter((x) => x.enabled)
-                .map((root) => (
-                  <div
-                    key={root.id}
-                    className={`preview-item ${selectedId === root.id ? "selected" : ""}`}
-                    onClick={() => setSelectedId(root.id)}
-                  >
-                    <BuilderSection item={root} preview />
-                    {pageItems
-                      .filter(
-                        (x) => x.parent_key === root.element_key && x.enabled,
-                      )
-                      .map((child) => (
-                        <div
-                          key={child.id}
-                          className={`preview-item child ${selectedId === child.id ? "selected" : ""}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedId(child.id);
-                          }}
-                        >
-                          <BuilderSection item={child} preview />
-                        </div>
-                      ))}
-                  </div>
-                ))}
-            </div>
+            <iframe
+              ref={previewRef}
+              key={`${pageKey}-${device}`}
+              src={`${previewRoute}?builderPreview=1`}
+              title={`${pageKey} live preview`}
+              onLoad={sendPreview}
+              style={{
+                display: "block",
+                width: "100%",
+                height: device === "mobile" ? 720 : "calc(100dvh - 255px)",
+                minHeight: 568,
+                border: 0,
+                background: "#f8fafc",
+              }}
+            />
           </div>
         </main>
         <aside className="settings-sidebar">
