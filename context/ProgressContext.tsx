@@ -102,6 +102,20 @@ export type AppExamAttempt = {
   sort_order: number;
   notes: string;
 };
+export type FeatureAccess = {
+  feature_key: string;
+  feature_label: string;
+  plan_slug: string;
+  plan_name: string;
+  allowed: boolean;
+  limit_value: number | null;
+  limit_unit: string;
+  used_value: number;
+  remaining_value: number | null;
+  reset_period: string;
+  reset_at: string | null;
+  upgrade_message: string;
+};
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -177,6 +191,8 @@ type ProgressContextValue = {
   sectionRules: AppSectionRule[];
   pageElements: AppPageElement[];
   examAttempts: AppExamAttempt[];
+  featureAccess: Record<string, FeatureAccess>;
+  refreshFeatureAccess: (featureKey?: string) => Promise<void>;
 
   progress: Progress;
   setProgress: Dispatch<SetStateAction<Progress>>;
@@ -261,6 +277,9 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   const [sectionRules, setSectionRules] = useState<AppSectionRule[]>([]);
   const [pageElements, setPageElements] = useState<AppPageElement[]>([]);
   const [examAttempts, setExamAttempts] = useState<AppExamAttempt[]>([]);
+  const [featureAccess, setFeatureAccess] = useState<
+    Record<string, FeatureAccess>
+  >({});
 
   const dataReadyRef = useRef(false);
 
@@ -375,6 +394,42 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [session?.user.id]);
+
+  const refreshFeatureAccess = async (featureKey?: string) => {
+    if (!supabase) return;
+    const keys = featureKey
+      ? [featureKey]
+      : (
+          (
+            await supabase
+              .from("app_features")
+              .select("feature_key")
+              .eq("enabled", true)
+              .order("sort_order")
+          ).data || []
+        ).map((item) => item.feature_key);
+    if (!keys.length) return;
+    const rows = await Promise.all(
+      keys.map(async (requestedFeature) => {
+        const { data, error } = await supabase.rpc("get_my_feature_access", {
+          requested_feature: requestedFeature,
+        });
+        return error ? null : (data?.[0] as FeatureAccess | undefined) || null;
+      }),
+    );
+    setFeatureAccess((current) => ({
+      ...current,
+      ...Object.fromEntries(
+        rows
+          .filter((row): row is FeatureAccess => Boolean(row))
+          .map((row) => [row.feature_key, row]),
+      ),
+    }));
+  };
+
+  useEffect(() => {
+    void refreshFeatureAccess();
+  }, [session?.user.id, planSlug]);
 
   /* =========================================================
      LOAD USER DATA
@@ -599,6 +654,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         sectionRules,
         pageElements,
         examAttempts,
+        featureAccess,
+        refreshFeatureAccess,
 
         progress,
         setProgress,
