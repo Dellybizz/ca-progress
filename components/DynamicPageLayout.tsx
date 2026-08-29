@@ -1,7 +1,7 @@
 "use client";
 
 import { CSSProperties, ReactNode } from "react";
-import { AppPageElement } from "@/context/ProgressContext";
+import { AppPageElement, FeatureAccess } from "@/context/ProgressContext";
 
 type Props = {
   pageKey: string;
@@ -9,6 +9,7 @@ type Props = {
   signedIn: boolean;
   planRank: number;
   isAdmin: boolean;
+  featureAccess: Record<string, FeatureAccess>;
   children: ReactNode;
 };
 
@@ -17,6 +18,7 @@ const isVisible = (
   signedIn: boolean,
   planRank: number,
   isAdmin: boolean,
+  featureAccess: Record<string, FeatureAccess>,
 ) => {
   if (isAdmin) return true;
   if (!item.enabled) return false;
@@ -27,6 +29,8 @@ const isVisible = (
     (!signedIn || planRank < item.minimum_plan_rank)
   )
     return false;
+  const featureKey = String(item.config?.featureKey || "");
+  if (featureKey && featureAccess[featureKey]?.allowed === false) return false;
   return true;
 };
 
@@ -73,13 +77,16 @@ export default function DynamicPageLayout({
   signedIn,
   planRank,
   isAdmin,
+  featureAccess,
   children,
 }: Props) {
   if (pageKey === "dashboard") return <>{children}</>;
 
   const allPageItems = elements.filter((item) => item.page_key === pageKey);
   const pageItems = allPageItems
-    .filter((item) => isVisible(item, signedIn, planRank, isAdmin))
+    .filter((item) =>
+      isVisible(item, signedIn, planRank, isAdmin, featureAccess),
+    )
     .sort((a, b) => a.sort_order - b.sort_order);
 
   // Existing installations without page-builder seeds keep their normal view.

@@ -283,6 +283,21 @@ const viewSectionKeys: Record<View, string> = {
   Settings: "settings",
 };
 
+const viewFeatureKeys: Record<View, string> = {
+  Dashboard: "dashboard.view",
+  Community: "community.view",
+  Subjects: "subjects.view",
+  Chapters: "chapters.track",
+  Analytics: "analytics.view",
+  "Study Sessions": "study-sessions.manage",
+  Goals: "goals.manage",
+  "Test Series": "test-series.manage",
+  Calendar: "calendar.manage",
+  Activity: "activity.view",
+  Notes: "notes.manage",
+  Settings: "settings.manage",
+};
+
 const subjectMeta: Record<
   SubjectName,
   {
@@ -979,6 +994,7 @@ function TrackerDashboard({
     isAdmin,
     sectionRules,
     pageElements,
+    featureAccess,
     examAttempts: managedAttempts,
     saveProgress: saveStoredProgress,
   } = useProgress();
@@ -1116,6 +1132,10 @@ function TrackerDashboard({
       ? savedView!
       : initialView;
   });
+
+  const currentFeature = featureAccess[viewFeatureKeys[view]];
+  const currentFeatureLocked =
+    !isAdmin && Boolean(currentFeature && !currentFeature.allowed);
 
   useEffect(() => {
     if (!userId && !publicViews.includes(view)) {
@@ -1607,179 +1627,208 @@ function TrackerDashboard({
           signedIn={Boolean(userId)}
           planRank={planRank}
           isAdmin={isAdmin}
+          featureAccess={featureAccess}
         >
-          {view === "Dashboard" && (
-            <Dashboard
-              courseLevel={courseLevel}
-              courseGroup={courseGroup}
-              subjects={subjects}
-              overall={overall}
-              counts={counts}
-              total={allRows.length}
-              subjectStats={subjectStats}
-              activities={activities.filter((item) =>
-                subjects.includes(item.subject as SubjectName),
+          {currentFeatureLocked ? (
+            <section className="feature-upgrade-gate">
+              <div className="feature-upgrade-icon">
+                <Crown size={24} />
+              </div>
+              <p className="eyebrow">PLAN ACCESS</p>
+              <h2>This feature is not included in your current plan</h2>
+              <p>
+                {currentFeature?.upgrade_message ||
+                  "Upgrade your plan to unlock this feature."}
+              </p>
+              <a href="/pricing">View plans</a>
+              <style>{`
+                .feature-upgrade-gate{min-height:420px;border:1px solid #e2e8f0;border-radius:20px;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:36px 22px;color:#17243a}
+                .feature-upgrade-icon{width:56px;height:56px;border-radius:16px;background:#edf4ff;color:#2863c7;display:grid;place-items:center;margin-bottom:14px}
+                .feature-upgrade-gate .eyebrow{margin:0 0 8px;color:#2863c7;font-size:11px;font-weight:850;letter-spacing:.12em}
+                .feature-upgrade-gate h2{margin:0;max-width:520px;font-size:24px}
+                .feature-upgrade-gate>p:not(.eyebrow){margin:10px 0 20px;max-width:500px;color:#667085;line-height:1.6}
+                .feature-upgrade-gate a{padding:11px 18px;border-radius:10px;background:#2863c7;color:#fff;text-decoration:none;font-weight:800}
+                @media(max-width:650px){.feature-upgrade-gate{min-height:55vh;border-radius:16px;padding:28px 18px}.feature-upgrade-gate h2{font-size:20px}}
+              `}</style>
+            </section>
+          ) : (
+            <>
+              {view === "Dashboard" && (
+                <Dashboard
+                  courseLevel={courseLevel}
+                  courseGroup={courseGroup}
+                  subjects={subjects}
+                  overall={overall}
+                  counts={counts}
+                  total={allRows.length}
+                  subjectStats={subjectStats}
+                  activities={activities.filter((item) =>
+                    subjects.includes(item.subject as SubjectName),
+                  )}
+                  studyHours={userId ? studyHours : [0, 0, 0, 0, 0, 0, 0]}
+                  onSubjects={() => nav("Subjects")}
+                  onQuickStudy={() => nav("Study Sessions")}
+                  onQuickTest={() => nav("Test Series")}
+                  onQuickGoal={() => nav("Goals")}
+                  onQuickCalendar={() => nav("Calendar")}
+                  onViewAll={() => nav("Activity")}
+                  pageElements={pageElements}
+                  signedIn={Boolean(userId)}
+                  planRank={planRank}
+                  isAdmin={isAdmin}
+                  attempt={selectedAttempt}
+                />
               )}
-              studyHours={userId ? studyHours : [0, 0, 0, 0, 0, 0, 0]}
-              onSubjects={() => nav("Subjects")}
-              onQuickStudy={() => nav("Study Sessions")}
-              onQuickTest={() => nav("Test Series")}
-              onQuickGoal={() => nav("Goals")}
-              onQuickCalendar={() => nav("Calendar")}
-              onViewAll={() => nav("Activity")}
-              pageElements={pageElements}
-              signedIn={Boolean(userId)}
-              planRank={planRank}
-              isAdmin={isAdmin}
-              attempt={selectedAttempt}
-            />
-          )}
 
-          {/* COMMUNITY */}
-          {view === "Community" &&
-            (userId ? (
-              <CommunityChat
-                userId={userId}
-                email={email}
-                courseLevel={courseLevel}
-                subjects={subjects}
-              />
-            ) : null)}
+              {/* COMMUNITY */}
+              {view === "Community" &&
+                (userId ? (
+                  <CommunityChat
+                    userId={userId}
+                    email={email}
+                    courseLevel={courseLevel}
+                    subjects={subjects}
+                  />
+                ) : null)}
 
-          {view === "Subjects" && (
-            <SubjectsView
-              subjects={subjects}
-              subjectStats={subjectStats}
-              onOpen={(subject) => {
-                setActiveSubject(subject);
+              {view === "Subjects" && (
+                <SubjectsView
+                  subjects={subjects}
+                  subjectStats={subjectStats}
+                  onOpen={(subject) => {
+                    setActiveSubject(subject);
 
-                window.localStorage.setItem("ca-progress-subject", subject);
+                    window.localStorage.setItem("ca-progress-subject", subject);
 
-                nav("Chapters");
-              }}
-            />
-          )}
-
-          {view === "Chapters" && (
-            <ChaptersView
-              subjects={subjects}
-              activeSubject={activeSubject}
-              setActiveSubject={setActiveSubject}
-              search={search}
-              setSearch={setSearch}
-              progress={progress}
-              toggle={toggle}
-              subjectStats={subjectStats}
-              onSaveProgress={saveProgress}
-              saveStatus={saveStatus}
-              onBack={() => nav("Subjects")}
-            />
-          )}
-
-          {view === "Analytics" && (
-            <AnalyticsView
-              overall={overall}
-              counts={counts}
-              total={allRows.length}
-              subjects={subjects}
-              subjectStats={subjectStats}
-              studyHours={studyHours}
-            />
-          )}
-
-          {view === "Activity" && (
-            <ActivityView
-              activities={activities.filter((item) =>
-                subjects.includes(item.subject as SubjectName),
+                    nav("Chapters");
+                  }}
+                />
               )}
-            />
-          )}
 
-          {view === "Study Sessions" && (
-            <StudySessionsView
-              subjects={subjects}
-              items={studySessions.filter((item) =>
-                subjects.includes(item.subject),
+              {view === "Chapters" && (
+                <ChaptersView
+                  subjects={subjects}
+                  activeSubject={activeSubject}
+                  setActiveSubject={setActiveSubject}
+                  search={search}
+                  setSearch={setSearch}
+                  progress={progress}
+                  toggle={toggle}
+                  subjectStats={subjectStats}
+                  onSaveProgress={saveProgress}
+                  saveStatus={saveStatus}
+                  onBack={() => nav("Subjects")}
+                />
               )}
-              setItems={setStudySessions}
-              onAddMinutes={(minutes) =>
-                setStudyHours((hours) => [
-                  ...hours.slice(0, 6),
-                  Number((hours[6] + minutes / 60).toFixed(1)),
-                ])
-              }
-              onDeleteMinutes={(minutes) =>
-                setStudyHours((hours) => [
-                  ...hours.slice(0, 6),
-                  Math.max(0, Number((hours[6] - minutes / 60).toFixed(1))),
-                ])
-              }
-              onSave={saveProgress}
-              saveStatus={saveStatus}
-            />
-          )}
 
-          {view === "Goals" && (
-            <GoalsView
-              items={goals}
-              setItems={setGoals}
-              onSave={saveProgress}
-              saveStatus={saveStatus}
-            />
-          )}
+              {view === "Analytics" && (
+                <AnalyticsView
+                  overall={overall}
+                  counts={counts}
+                  total={allRows.length}
+                  subjects={subjects}
+                  subjectStats={subjectStats}
+                  studyHours={studyHours}
+                />
+              )}
 
-          {view === "Test Series" && (
-            <TestsView
-              subjects={subjects}
-              items={tests.filter((item) => subjects.includes(item.subject))}
-              setItems={setTests}
-              onSave={saveProgress}
-              saveStatus={saveStatus}
-            />
-          )}
+              {view === "Activity" && (
+                <ActivityView
+                  activities={activities.filter((item) =>
+                    subjects.includes(item.subject as SubjectName),
+                  )}
+                />
+              )}
 
-          {view === "Calendar" && (
-            <CalendarView
-              items={calendarItems}
-              setItems={setCalendarItems}
-              onSave={saveProgress}
-              saveStatus={saveStatus}
-            />
-          )}
+              {view === "Study Sessions" && (
+                <StudySessionsView
+                  subjects={subjects}
+                  items={studySessions.filter((item) =>
+                    subjects.includes(item.subject),
+                  )}
+                  setItems={setStudySessions}
+                  onAddMinutes={(minutes) =>
+                    setStudyHours((hours) => [
+                      ...hours.slice(0, 6),
+                      Number((hours[6] + minutes / 60).toFixed(1)),
+                    ])
+                  }
+                  onDeleteMinutes={(minutes) =>
+                    setStudyHours((hours) => [
+                      ...hours.slice(0, 6),
+                      Math.max(0, Number((hours[6] - minutes / 60).toFixed(1))),
+                    ])
+                  }
+                  onSave={saveProgress}
+                  saveStatus={saveStatus}
+                />
+              )}
 
-          {view === "Notes" && (
-            <NotesView
-              items={notes}
-              setItems={setNotes}
-              onSave={saveProgress}
-              saveStatus={saveStatus}
-            />
-          )}
+              {view === "Goals" && (
+                <GoalsView
+                  items={goals}
+                  setItems={setGoals}
+                  onSave={saveProgress}
+                  saveStatus={saveStatus}
+                />
+              )}
 
-          {view === "Settings" && (
-            <SettingsView
-              email={email}
-              signedIn={Boolean(userId)}
-              isAdmin={isAdmin}
-              courseLevel={courseLevel}
-              courseGroup={courseGroup}
-              attemptId={attemptId}
-              examAttempts={examAttempts}
-              customAttemptDate={customAttemptDate}
-              onAttemptChange={(id, date) => {
-                setAttemptId(id);
-                setCustomAttemptDate(date);
-                window.localStorage.setItem("ca-progress-attempt-id", id);
-                if (date)
-                  window.localStorage.setItem(
-                    "ca-progress-custom-attempt-date",
-                    date,
-                  );
-              }}
-              onCourseChange={applyCourseSelection}
-              onSignIn={onRequireAuth}
-              onLogout={onLogout}
-            />
+              {view === "Test Series" && (
+                <TestsView
+                  subjects={subjects}
+                  items={tests.filter((item) =>
+                    subjects.includes(item.subject),
+                  )}
+                  setItems={setTests}
+                  onSave={saveProgress}
+                  saveStatus={saveStatus}
+                />
+              )}
+
+              {view === "Calendar" && (
+                <CalendarView
+                  items={calendarItems}
+                  setItems={setCalendarItems}
+                  onSave={saveProgress}
+                  saveStatus={saveStatus}
+                />
+              )}
+
+              {view === "Notes" && (
+                <NotesView
+                  items={notes}
+                  setItems={setNotes}
+                  onSave={saveProgress}
+                  saveStatus={saveStatus}
+                />
+              )}
+
+              {view === "Settings" && (
+                <SettingsView
+                  email={email}
+                  signedIn={Boolean(userId)}
+                  isAdmin={isAdmin}
+                  courseLevel={courseLevel}
+                  courseGroup={courseGroup}
+                  attemptId={attemptId}
+                  examAttempts={examAttempts}
+                  customAttemptDate={customAttemptDate}
+                  onAttemptChange={(id, date) => {
+                    setAttemptId(id);
+                    setCustomAttemptDate(date);
+                    window.localStorage.setItem("ca-progress-attempt-id", id);
+                    if (date)
+                      window.localStorage.setItem(
+                        "ca-progress-custom-attempt-date",
+                        date,
+                      );
+                  }}
+                  onCourseChange={applyCourseSelection}
+                  onSignIn={onRequireAuth}
+                  onLogout={onLogout}
+                />
+              )}
+            </>
           )}
         </DynamicPageLayout>
       </section>
