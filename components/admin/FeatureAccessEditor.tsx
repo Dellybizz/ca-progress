@@ -6,6 +6,7 @@ import { Save, Search, ShieldCheck } from "lucide-react";
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = url && key ? createClient(url, key) : null;
+const featureV2Styles = `.plan-select{display:grid!important;grid-template-columns:1fr!important;gap:4px!important;min-width:220px}.plan-select>span{font-size:8px!important;color:#c7d7f2!important}.plan-select select{width:100%!important;background:#fff!important;color:#172b4d!important;border:2px solid #8fb5f5!important;font-weight:800!important;appearance:auto!important}.plan-select option{background:#fff!important;color:#172b4d!important}.feature-controls{grid-template-columns:repeat(3,minmax(125px,1fr)) auto!important;align-content:start}.feature-controls .upgrade-copy{grid-column:1/-2}.feature-controls>button{grid-column:-2/-1}.feature-copy code{word-break:break-all}@media(max-width:1050px){.feature-controls{grid-template-columns:repeat(2,minmax(130px,1fr))!important}.feature-controls .upgrade-copy,.feature-controls>button{grid-column:1/-1}.feature-controls>button{justify-content:center}}@media(max-width:650px){.plan-select{min-width:0}.feature-controls{grid-template-columns:1fr!important}}`;
 type Plan = { id: string; slug: string; name: string; rank: number };
 type Feature = {
   feature_key: string;
@@ -101,13 +102,16 @@ export default function FeatureAccessEditor() {
             </p>
           </span>
         </div>
-        <select value={planId} onChange={(e) => setPlanId(e.target.value)}>
-          {plans.map((plan) => (
-            <option value={plan.id} key={plan.id}>
-              {plan.name} plan
-            </option>
-          ))}
-        </select>
+        <label className="plan-select">
+          <span>Editing plan</span>
+          <select value={planId} onChange={(e) => setPlanId(e.target.value)}>
+            {plans.map((plan) => (
+              <option value={plan.id} key={plan.id}>
+                {plan.name} plan
+              </option>
+            ))}
+          </select>
+        </label>
       </header>
       <div className="access-toolbar">
         <label>
@@ -131,6 +135,17 @@ export default function FeatureAccessEditor() {
         {visible.map((feature) => {
           const rule = ruleFor(feature.feature_key);
           if (!rule) return null;
+          const accessMode = !rule.enabled
+            ? "locked"
+            : rule.limit_unit === "unlimited"
+              ? "unlimited"
+              : "limited";
+          const unitLabel =
+            feature.meter_type === "megabytes"
+              ? "Storage (MB)"
+              : feature.meter_type === "minutes"
+                ? "Minutes included"
+                : "Number included";
           return (
             <article key={feature.feature_key}>
               <div className="feature-copy">
@@ -143,23 +158,19 @@ export default function FeatureAccessEditor() {
                 <code>{feature.feature_key}</code>
               </div>
               <div className="feature-controls">
-                <label className="access-toggle">
-                  <input
-                    type="checkbox"
-                    checked={rule.enabled}
-                    onChange={(e) =>
-                      update(feature.feature_key, { enabled: e.target.checked })
-                    }
-                  />
-                  <span>{rule.enabled ? "Included" : "Locked"}</span>
-                </label>
                 <label>
-                  Allowance
+                  Access for this plan
                   <select
-                    value={rule.limit_unit}
+                    value={accessMode}
                     onChange={(e) =>
                       update(feature.feature_key, {
-                        limit_unit: e.target.value as Rule["limit_unit"],
+                        enabled: e.target.value !== "locked",
+                        limit_unit:
+                          e.target.value === "limited"
+                            ? feature.meter_type === "boolean"
+                              ? "count"
+                              : feature.meter_type
+                            : "unlimited",
                         limit_value:
                           e.target.value === "unlimited"
                             ? null
@@ -167,17 +178,16 @@ export default function FeatureAccessEditor() {
                       })
                     }
                   >
-                    <option value="unlimited">Unlimited</option>
+                    <option value="locked">Locked</option>
+                    <option value="unlimited">Included · unlimited</option>
                     {feature.meter_type !== "boolean" && (
-                      <option value={feature.meter_type}>
-                        {feature.meter_type}
-                      </option>
+                      <option value="limited">Included · limited</option>
                     )}
                   </select>
                 </label>
-                {rule.limit_unit !== "unlimited" && (
+                {accessMode === "limited" && (
                   <label>
-                    Amount
+                    {unitLabel}
                     <input
                       type="number"
                       min="0"
@@ -191,24 +201,85 @@ export default function FeatureAccessEditor() {
                     />
                   </label>
                 )}
-                <label>
-                  Resets
-                  <select
-                    value={rule.reset_period}
-                    onChange={(e) =>
-                      update(feature.feature_key, {
-                        reset_period: e.target.value as Rule["reset_period"],
-                      })
-                    }
-                  >
-                    <option value="never">Never</option>
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                  </select>
-                </label>
+                {accessMode === "limited" && (
+                  <label>
+                    Allowance resets
+                    <select
+                      value={rule.reset_period}
+                      onChange={(e) =>
+                        update(feature.feature_key, {
+                          reset_period: e.target.value as Rule["reset_period"],
+                        })
+                      }
+                    >
+                      <option value="never">Never</option>
+                      <option value="daily">Every day</option>
+                      <option value="weekly">Every week</option>
+                      <option value="monthly">Every month</option>
+                    </select>
+                  </label>
+                )}
+                {accessMode === "limited" && (
+                  <label>
+                    Warning at (%)
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={Number(rule.config?.warning_percent || 80)}
+                      onChange={(e) =>
+                        update(feature.feature_key, {
+                          config: {
+                            ...rule.config,
+                            warning_percent: Number(e.target.value),
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                )}
+                {feature.feature_key === "notes.storage" &&
+                  accessMode !== "locked" && (
+                    <label>
+                      Maximum file (MB)
+                      <input
+                        type="number"
+                        min="1"
+                        value={Number(rule.config?.max_file_mb || 25)}
+                        onChange={(e) =>
+                          update(feature.feature_key, {
+                            config: {
+                              ...rule.config,
+                              max_file_mb: Number(e.target.value),
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                  )}
+                {feature.meter_type !== "boolean" &&
+                  accessMode === "limited" && (
+                    <label>
+                      When allowance ends
+                      <select
+                        value={String(rule.config?.after_limit || "upgrade")}
+                        onChange={(e) =>
+                          update(feature.feature_key, {
+                            config: {
+                              ...rule.config,
+                              after_limit: e.target.value,
+                            },
+                          })
+                        }
+                      >
+                        <option value="upgrade">Show upgrade prompt</option>
+                        <option value="readonly">Make read-only</option>
+                        <option value="block">Block without prompt</option>
+                      </select>
+                    </label>
+                  )}
                 <label className="upgrade-copy">
-                  Limit message
+                  Upgrade or locked message
                   <input
                     value={rule.upgrade_message}
                     onChange={(e) =>
@@ -229,6 +300,7 @@ export default function FeatureAccessEditor() {
       </div>
       {notice && <div className="access-toast">{notice}</div>}
       <style>{styles}</style>
+      <style>{featureV2Styles}</style>
     </section>
   );
 }
