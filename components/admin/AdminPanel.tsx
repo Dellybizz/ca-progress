@@ -14,6 +14,7 @@ import {
   Save,
   Search,
   Shield,
+  ShieldCheck,
   ShieldAlert,
   Trash2,
   Users,
@@ -23,6 +24,8 @@ import {
   intermediateSyllabus,
   finalSyllabus,
 } from "@/lib/syllabus";
+import PageBuilderStudio from "@/components/admin/PageBuilderStudio";
+import FeatureAccessEditor from "@/components/admin/FeatureAccessEditor";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -32,6 +35,7 @@ type Role = "parent_owner" | "owner" | "admin" | "moderator";
 type Tab =
   | "overview"
   | "sections"
+  | "access"
   | "attempts"
   | "plans"
   | "subscriptions"
@@ -808,6 +812,7 @@ export default function AdminPanel() {
   const allTabs: [Tab, string, React.ReactNode][] = [
     ["overview", "Overview", <BarChart3 key="o" />],
     ["sections", "Page builder", <LayoutGrid key="s" />],
+    ["access", "Feature access", <ShieldCheck key="f" />],
     ["attempts", "Attempts", <CalendarDays key="e" />],
     ["plans", "Plans", <Crown key="p" />],
     ["subscriptions", "Members", <Users key="u" />],
@@ -820,6 +825,7 @@ export default function AdminPanel() {
     parent_owner: [
       "overview",
       "sections",
+      "access",
       "attempts",
       "plans",
       "subscriptions",
@@ -831,6 +837,7 @@ export default function AdminPanel() {
     owner: [
       "overview",
       "sections",
+      "access",
       "attempts",
       "plans",
       "subscriptions",
@@ -841,6 +848,7 @@ export default function AdminPanel() {
     admin: [
       "overview",
       "sections",
+      "access",
       "attempts",
       "plans",
       "subscriptions",
@@ -1043,7 +1051,9 @@ export default function AdminPanel() {
             </div>
           </>
         )}
-        {tab === "sections" && (
+        {tab === "sections" && <PageBuilderStudio />}
+        {tab === "access" && <FeatureAccessEditor />}
+        {false && (
           <>
             <section className="builder-intro">
               <div>
